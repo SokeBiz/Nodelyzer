@@ -19,7 +19,7 @@ export default function HeroSection() {
             </p>
             <div className="mt-8 flex flex-col sm:flex-row gap-4 items-center justify-center lg:justify-start">
               <Link href="#" className="bg-gradient-to-r from-blue-500 to-cyan-400 hover:from-blue-600 hover:to-cyan-500 text-white text-lg py-3 px-6 rounded-md transition-colors duration-200 text-center w-full sm:w-auto">
-                Start Free Trial
+                Start Analyzing
               </Link>
               <Link href="#" className="border border-slate-700 hover:bg-slate-800 text-white text-lg py-3 px-6 rounded-md transition-colors duration-200 text-center w-full sm:w-auto">
                 Learn
