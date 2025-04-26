@@ -4,11 +4,14 @@ import { useState } from 'react';
 import Link from 'next/link';
 import {useCreateUserWithEmailAndPassword} from 'react-firebase-hooks/auth'
 import {auth} from '@/lib/firebase'
+import { useRouter } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 
 export default function Signup() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const router = useRouter();
 
   const [createUserWithEmailAndPassword, user, loading, error] = useCreateUserWithEmailAndPassword(auth);
 
@@ -31,7 +34,7 @@ export default function Signup() {
         setEmail("");
         setPassword("");
         setConfirmPassword("");
-        // You can redirect to dashboard or home page here
+        router.push('/');
       }
     } catch (error) {
       console.error('Error during signup:', error);
@@ -110,9 +113,17 @@ export default function Signup() {
 
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            Sign Up
+            {loading ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span>Creating account...</span>
+              </>
+            ) : (
+              'Sign Up'
+            )}
           </button>
 
           <div className="relative mb-3">

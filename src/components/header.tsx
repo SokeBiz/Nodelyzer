@@ -2,10 +2,25 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Menu, X } from "lucide-react";
+import { Menu, X, LogOut } from "lucide-react";
+import { useAuthState, useSignOut } from "react-firebase-hooks/auth";
+import { auth } from "@/lib/firebase";
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [user] = useAuthState(auth);
+  const [signOut] = useSignOut(auth);
+
+  const handleLogout = async () => {
+    await signOut();
+  };
+
+  const getUserInitial = () => {
+    if (user?.email) {
+      return user.email.charAt(0).toUpperCase();
+    }
+    return "";
+  };
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-slate-900/80 backdrop-blur-md border-b border-slate-800">
@@ -32,12 +47,29 @@ export default function Header() {
         </nav>
 
         <div className="hidden md:flex items-center gap-4">
-          <Link href="#" className="px-4 py-2 rounded-md border border-slate-700 hover:bg-slate-800 text-white transition-colors">
-            Log In
-          </Link>
-          <Link href="#" className="px-4 py-2 rounded-md bg-gradient-to-r from-blue-500 to-cyan-400 hover:from-blue-600 hover:to-cyan-500 text-white transition-colors">
-            Get Started
-          </Link>
+          {user ? (
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold">
+                {getUserInitial()}
+              </div>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 rounded-md border border-slate-700 hover:bg-slate-800 text-white transition-colors"
+              >
+                <LogOut size={18} />
+                Logout
+              </button>
+            </div>
+          ) : (
+            <>
+              <Link href="/login" className="px-4 py-2 rounded-md border border-slate-700 hover:bg-slate-800 text-white transition-colors">
+                Log In
+              </Link>
+              <Link href="#" className="px-4 py-2 rounded-md bg-gradient-to-r from-blue-500 to-cyan-400 hover:from-blue-600 hover:to-cyan-500 text-white transition-colors">
+                Get Started
+              </Link>
+            </>
+          )}
         </div>
 
         <div className="md:hidden">
@@ -93,21 +125,44 @@ export default function Header() {
                     >
                       Security
                     </Link>
-                    <Link
-                      href="#pricing"
-                      className="text-lg text-slate-300 hover:text-white transition-colors"
-                      onClick={() => setIsMenuOpen(false)}
-                    >
-                      Pricing
-                    </Link>
                   </nav>
                   <div className="mt-auto flex flex-col gap-4 p-8">
-                    <button className="w-full px-4 py-2 rounded-md border border-slate-700 hover:bg-slate-800 text-white transition-colors">
-                      Log In
-                    </button>
-                    <button className="w-full px-4 py-2 rounded-md bg-gradient-to-r from-blue-500 to-cyan-400 hover:from-blue-600 hover:to-cyan-500 text-white transition-colors">
-                      Get Started
-                    </button>
+                    {user ? (
+                      <>
+                        <div className="flex items-center justify-center gap-2 mb-4">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold">
+                            {getUserInitial()}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            handleLogout();
+                            setIsMenuOpen(false);
+                          }}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-slate-700 hover:bg-slate-800 text-white transition-colors"
+                        >
+                          <LogOut size={18} />
+                          Logout
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <Link
+                          href="/login"
+                          className="w-full px-4 py-2 rounded-md border border-slate-700 hover:bg-slate-800 text-white transition-colors text-center"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Log In
+                        </Link>
+                        <Link
+                          href="#"
+                          className="w-full px-4 py-2 rounded-md bg-gradient-to-r from-blue-500 to-cyan-400 hover:from-blue-600 hover:to-cyan-500 text-white transition-colors text-center"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Get Started
+                        </Link>
+                      </>
+                    )}
                   </div>
                 </div>
               </>
