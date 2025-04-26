@@ -15,13 +15,17 @@ export default function Signup() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (password !== confirmPassword) {
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedPassword = password.trim();
+    const trimmedConfirmPassword = confirmPassword.trim();
+    
+    if (trimmedPassword !== trimmedConfirmPassword) {
       alert("Passwords don't match!");
       return;
     }
 
     try {
-      const result = await createUserWithEmailAndPassword(email, password);
+      const result = await createUserWithEmailAndPassword(trimmedEmail, trimmedPassword);
       if (result) {
         console.log('User created successfully:', result.user);
         setEmail("");

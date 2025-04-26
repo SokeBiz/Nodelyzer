@@ -2,16 +2,35 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import {useSignInWithEmailAndPassword} from 'react-firebase-hooks/auth'
+import {auth} from '@/lib/firebase'
+
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [signInWithEmailAndPassword, user, loading, error] = useSignInWithEmailAndPassword(auth);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle login logic here
-    console.log('Login attempt with:', { email, password });
-  };
+    
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedPassword = password.trim();
+    
+    try {
+      const result = await signInWithEmailAndPassword(trimmedEmail, trimmedPassword);
+      if (result) {
+        console.log('User signed in successfully:', result.user);
+        setEmail("");
+        setPassword("");
+        // You can redirect to dashboard or home page here
+      }
+    } catch (error) {
+      console.error('Error during sign in:', error);
+      // You can show a more user-friendly error message here
+      alert('Error during sign in. Please check your credentials and try again.');
+    }
+  }; 
 
   const handleGoogleLogin = () => {
     // Handle Google login logic here
