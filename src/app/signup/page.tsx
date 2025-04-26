@@ -2,20 +2,43 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import {useCreateUserWithEmailAndPassword} from 'react-firebase-hooks/auth'
+import {auth} from '@/lib/firebase'
 
-export default function Login() {
+export default function Signup() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [createUserWithEmailAndPassword, user, loading, error] = useCreateUserWithEmailAndPassword(auth);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle login logic here
-    console.log('Login attempt with:', { email, password });
+    
+    if (password !== confirmPassword) {
+      alert("Passwords don't match!");
+      return;
+    }
+
+    try {
+      const result = await createUserWithEmailAndPassword(email, password);
+      if (result) {
+        console.log('User created successfully:', result.user);
+        setEmail("");
+        setPassword("");
+        setConfirmPassword("");
+        // You can redirect to dashboard or home page here
+      }
+    } catch (error) {
+      console.error('Error during signup:', error);
+      // You can show a more user-friendly error message here
+      alert('Error during signup. Please try again.');
+    }
   };
 
-  const handleGoogleLogin = () => {
-    // Handle Google login logic here
-    console.log('Google login clicked');
+  const handleGoogleSignup = () => {
+    // Handle Google signup logic here
+    console.log('Google signup clicked');
   };
 
   return (
@@ -31,8 +54,8 @@ export default function Login() {
 
       <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
-          <p className="text-gray-400">Sign in to your account</p>
+          <h1 className="text-3xl font-bold text-white mb-2">Create Account</h1>
+          <p className="text-gray-400">Sign up to get started</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -61,7 +84,22 @@ export default function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter your password"
+              placeholder="Create a password"
+              required
+            />
+          </div>
+
+          <div>
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-2">
+              Confirm Password
+            </label>
+            <input
+              type="password"
+              id="confirmPassword"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full px-4 py-3 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Confirm your password"
               required
             />
           </div>
@@ -70,7 +108,7 @@ export default function Login() {
             type="submit"
             className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
           >
-            Sign In
+            Sign Up
           </button>
 
           <div className="relative mb-3">
@@ -84,10 +122,10 @@ export default function Login() {
 
           <button
             type="button"
-            onClick={handleGoogleLogin}
+            onClick={handleGoogleSignup}
             className="w-full flex items-center justify-center gap-2 bg-white text-gray-800 py-3 rounded-lg font-medium hover:bg-gray-100 transition-colors"
           >
-            Sign in with <span className="flex">
+            Sign up with <span className="flex">
               <span className="text-[#4285F4]">G</span>
               <span className="text-[#EA4335]">o</span>
               <span className="text-[#FBBC05]">o</span>
@@ -99,9 +137,9 @@ export default function Login() {
 
           <div className="text-center mt-4">
             <p className="text-gray-400">
-              New here?{' '}
-              <Link href="/signup" className="text-blue-500 hover:text-blue-400 transition-colors font-bold underline">
-                Sign up
+              Already have an account?{' '}
+              <Link href="/login" className="text-blue-500 hover:text-blue-400 transition-colors font-bold underline">
+                Login
               </Link>
             </p>
           </div>
@@ -110,5 +148,3 @@ export default function Login() {
     </section>
   );
 }
-
-
