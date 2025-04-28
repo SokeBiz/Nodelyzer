@@ -6,6 +6,7 @@ import {useSignInWithEmailAndPassword} from 'react-firebase-hooks/auth'
 import {auth} from '@/lib/firebase'
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -19,18 +20,22 @@ export default function Login() {
     const trimmedEmail = email.trim().toLowerCase();
     const trimmedPassword = password.trim();
     
-    try {
-      const result = await signInWithEmailAndPassword(trimmedEmail, trimmedPassword);
-      if (result) {
-        console.log('User signed in successfully:', result.user);
-        setEmail("");
-        setPassword("");
-        router.push('/');
+    const result = await signInWithEmailAndPassword(trimmedEmail, trimmedPassword);
+    
+    if (result) {
+      console.log('User signed in successfully:', result.user);
+      setEmail("");
+      setPassword("");
+      toast.success('Successfully logged in!');
+      router.push('/');
+    } else if (error) {
+      // console.error('Error during sign in:', error);
+      if (error.code === 'auth/invalid-credential' || 
+          error.message?.includes('INVALID_LOGIN_CREDENTIALS')) {
+        toast.error('Invalid login credentials. Please try again.');
+      } else {
+        toast.error('Failed to sign in. Please try again later.');
       }
-    } catch (error) {
-      console.error('Error during sign in:', error);
-      // You can show a more user-friendly error message here
-      alert('Error during sign in. Please check your credentials and try again.');
     }
   }; 
 
