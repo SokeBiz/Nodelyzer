@@ -23,6 +23,13 @@ export default function Signup() {
     const trimmedPassword = password.trim();
     const trimmedConfirmPassword = confirmPassword.trim();
     
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+    
     if (trimmedPassword !== trimmedConfirmPassword) {
       toast.error("Passwords don't match!");
       return;

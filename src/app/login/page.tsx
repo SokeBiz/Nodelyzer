@@ -20,6 +20,13 @@ export default function Login() {
     const trimmedEmail = email.trim().toLowerCase();
     const trimmedPassword = password.trim();
     
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+    
     const result = await signInWithEmailAndPassword(trimmedEmail, trimmedPassword);
     
     if (result) {
