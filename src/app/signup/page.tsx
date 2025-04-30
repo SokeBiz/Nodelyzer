@@ -6,6 +6,7 @@ import {useCreateUserWithEmailAndPassword} from 'react-firebase-hooks/auth'
 import {auth} from '@/lib/firebase'
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function Signup() {
   const [email, setEmail] = useState('');
@@ -23,23 +24,27 @@ export default function Signup() {
     const trimmedConfirmPassword = confirmPassword.trim();
     
     if (trimmedPassword !== trimmedConfirmPassword) {
-      alert("Passwords don't match!");
+      toast.error("Passwords don't match!");
       return;
     }
 
-    try {
-      const result = await createUserWithEmailAndPassword(trimmedEmail, trimmedPassword);
-      if (result) {
-        console.log('User created successfully:', result.user);
-        setEmail("");
-        setPassword("");
-        setConfirmPassword("");
-        router.push('/');
+    const result = await createUserWithEmailAndPassword(trimmedEmail, trimmedPassword);
+    
+    if (result) {
+      console.log('User created successfully:', result.user);
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
+      toast.success('Account created successfully!');
+      router.push('/');
+    } else if (error) {
+      if (error.code === 'auth/email-already-in-use') {
+        toast.error('This email is already registered. Please try logging in.');
+      } else if (error.code === 'auth/weak-password') {
+        toast.error('Password is too weak. Please use a stronger password.');
+      } else {
+        toast.error('Failed to create account. Please try again later.');
       }
-    } catch (error) {
-      console.error('Error during signup:', error);
-      // You can show a more user-friendly error message here
-      alert('Error during signup. Please try again.');
     }
   };
 
