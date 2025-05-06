@@ -5,10 +5,11 @@ import Link from "next/link";
 import { Menu, X, LogOut } from "lucide-react";
 import { useAuthState, useSignOut } from "react-firebase-hooks/auth";
 import { auth } from "@/lib/firebase";
+import { useAuth } from "@/context/AuthContext";
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [user] = useAuthState(auth);
+  // const [user] = useAuthState(auth);
   const [signOut] = useSignOut(auth);
 
   const handleLogout = async () => {
@@ -21,6 +22,12 @@ export default function Header() {
     }
     return "";
   };
+
+
+
+  const { user } = useAuth()
+  console.log(user)
+
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-slate-900/80 backdrop-blur-md border-b border-slate-800">
@@ -49,12 +56,12 @@ export default function Header() {
         <div className="hidden md:flex items-center gap-4">
           {user ? (
             <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold cursor-pointer">
                 {getUserInitial()}
               </div>
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 rounded-md border border-slate-700 hover:bg-slate-800 text-white transition-colors"
+                className="flex items-center gap-2 px-4 py-2 rounded-md border border-slate-700 hover:bg-slate-800 text-white transition-colors cursor-pointer"
               >
                 <LogOut size={18} />
                 Logout
@@ -62,10 +69,10 @@ export default function Header() {
             </div>
           ) : (
             <>
-              <Link href="/login" className="px-4 py-2 rounded-md border border-slate-700 hover:bg-slate-800 text-white transition-colors">
+              <Link href="/login" className="px-4 py-2 rounded-md border border-slate-700 hover:bg-slate-800 text-white transition-colors cursor-pointer">
                 Log In
               </Link>
-              <Link href="#" className="px-4 py-2 rounded-md bg-gradient-to-r from-blue-500 to-cyan-400 hover:from-blue-600 hover:to-cyan-500 text-white transition-colors">
+              <Link href="#" className="px-4 py-2 rounded-md bg-gradient-to-r from-blue-500 to-cyan-400 hover:from-blue-600 hover:to-cyan-500 text-white transition-colors cursor-pointer">
                 Get Started
               </Link>
             </>

@@ -7,12 +7,14 @@ import {auth} from '@/lib/firebase'
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [signInWithEmailAndPassword, user, loading, error] = useSignInWithEmailAndPassword(auth);
   const router = useRouter();
+  const { signInWithGoogle } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +33,7 @@ export default function Login() {
     
     if (result) {
       console.log('User signed in successfully:', result.user);
+  
       setEmail("");
       setPassword("");
       toast.success('Successfully logged in!');
@@ -46,9 +49,15 @@ export default function Login() {
     }
   }; 
 
-  const handleGoogleLogin = () => {
-    // Handle Google login logic here
-    console.log('Google login clicked');
+  const handleGoogleLogin = async () => {
+    try {
+      await signInWithGoogle();
+      toast.success('Successfully logged in with Google!');
+      router.push('/');
+    } catch (error) {
+      console.error('Error during Google sign in:', error);
+      toast.error('Failed to sign in with Google. Please try again.');
+    }
   };
 
   return (
@@ -102,7 +111,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
           >
             {loading ? (
               <>
@@ -126,7 +135,7 @@ export default function Login() {
           <button
             type="button"
             onClick={handleGoogleLogin}
-            className="w-full flex items-center justify-center gap-2 bg-white text-gray-800 py-3 rounded-lg font-medium hover:bg-gray-100 transition-colors"
+            className="w-full flex items-center justify-center gap-2 bg-white text-gray-800 py-3 rounded-lg font-medium hover:bg-gray-100 transition-colors cursor-pointer"
           >
             Sign in with <span className="flex">
               <span className="text-[#4285F4]">G</span>

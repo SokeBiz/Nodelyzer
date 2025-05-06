@@ -7,12 +7,14 @@ import {auth} from '@/lib/firebase'
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/context/AuthContext';
 
 export default function Signup() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const router = useRouter();
+  const { signInWithGoogle } = useAuth();
 
   const [createUserWithEmailAndPassword, user, loading, error] = useCreateUserWithEmailAndPassword(auth);
 
@@ -55,9 +57,15 @@ export default function Signup() {
     }
   };
 
-  const handleGoogleSignup = () => {
-    // Handle Google signup logic here
-    console.log('Google signup clicked');
+  const handleGoogleSignup = async () => {
+    try {
+      await signInWithGoogle();
+      toast.success('Successfully signed up with Google!');
+      router.push('/');
+    } catch (error) {
+      console.error('Error during Google sign up:', error);
+      toast.error('Failed to sign up with Google. Please try again.');
+    }
   };
 
   return (
@@ -126,7 +134,7 @@ export default function Signup() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
           >
             {loading ? (
               <>
@@ -150,7 +158,7 @@ export default function Signup() {
           <button
             type="button"
             onClick={handleGoogleSignup}
-            className="w-full flex items-center justify-center gap-2 bg-white text-gray-800 py-3 rounded-lg font-medium hover:bg-gray-100 transition-colors"
+            className="w-full flex items-center justify-center gap-2 bg-white text-gray-800 py-3 rounded-lg font-medium hover:bg-gray-100 transition-colors cursor-pointer"
           >
             Sign up with <span className="flex">
               <span className="text-[#4285F4]">G</span>
