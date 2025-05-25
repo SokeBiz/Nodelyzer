@@ -3,12 +3,17 @@
 // import { Button } from "./ui/button";
 // import NodeMap from "./NodeMap";
 import Link from "next/link";
-import RenderMap from "./renderMap";
+import ParticleSphere from "./ParticleSphere";
 
 export default function HeroSection() {
   return (
-    <section className="pt-28 pb-16 px-4 bg-gradient-to-b from-slate-950 to-slate-900">
-      <div className="container mx-auto">
+    <section className="relative pt-28 pb-16 px-4 bg-gradient-to-b from-slate-950 to-slate-900 overflow-hidden">
+      {/* Fullscreen starfield background */}
+      <div className="absolute inset-0 z-0">
+        <ParticleSphere className="w-full h-full" fullscreen={true} />
+      </div>
+
+      <div className="container mx-auto relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div className="order-2 lg:order-1">
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight">
@@ -44,10 +49,7 @@ export default function HeroSection() {
           </div>
           <div className="order-1 lg:order-2">
             <div className="relative h-[400px] flex items-center justify-center">
-              <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-cyan-400 rounded-xl blur-xl opacity-20"></div>
-              <div className="relative bg-slate-800/50 backdrop-blur-sm rounded-xl p-0 h-full w-full border border-slate-700 flex items-center justify-center overflow-hidden">
-                <RenderMap className="w-full h-full" />
-              </div>
+              <ParticleSphere className="w-full h-full" />
             </div>
           </div>
         </div>

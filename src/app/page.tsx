@@ -16,14 +16,12 @@ export default function Home() {
   const router = useRouter()
 
   const [user] = useAuthState(auth)
-  
   if (!user) {
     // router.push('/login')
     console.log('no user')
   }
 
   
-
   return (
     <main className="bg-slate-950 text-white min-h-screen">
         <Header />
