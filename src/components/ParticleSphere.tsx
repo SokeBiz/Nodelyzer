@@ -11,9 +11,11 @@ import { createNoise3D, createNoise4D } from 'simplex-noise';
 interface ParticleSphereProps {
   className?: string;
   fullscreen?: boolean;
+  /* Optional radius of the particle sphere (only used when fullscreen is false). */
+  size?: number;
 }
 
-export default function ParticleSphere({ className, fullscreen = false }: ParticleSphereProps) {
+export default function ParticleSphere({ className, fullscreen = false, size }: ParticleSphereProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -24,8 +26,8 @@ export default function ParticleSphere({ className, fullscreen = false }: Partic
         camera: THREE.PerspectiveCamera,
         renderer: THREE.WebGLRenderer,
         controls: OrbitControls,
-        composer: EffectComposer,
-        bloomPass: UnrealBloomPass,
+        composer: EffectComposer | null = null,
+        bloomPass: UnrealBloomPass | null = null,
         particlesGeometry: THREE.BufferGeometry,
         particlesMaterial: THREE.ShaderMaterial,
         particleSystem: THREE.Points,
@@ -35,15 +37,18 @@ export default function ParticleSphere({ className, fullscreen = false }: Partic
         noise3D: any,
         noise4D: any;
 
+    // Determine sphere radius – allow override via prop when not fullscreen
+    const shapeSize = fullscreen ? 14 : size ?? 14;
+
     const CONFIG = {
-      particleCount: 15000,
-      shapeSize: 14,
+      particleCount: fullscreen ? 15000 : 30000,
+      shapeSize,
       noiseFrequency: 0.1,
       noiseTimeScale: 0.04,
       noiseMaxStrength: 2.8,
       colorScheme: 'fire',
       particleSizeRange: [0.08, 0.25],
-      starCount: fullscreen ? 50000 : 18000,
+      starCount: fullscreen ? 80000 : 18000,
       bloomStrength: 1.3,
       bloomRadius: 0.5,
       bloomThreshold: 0.05,
@@ -112,15 +117,25 @@ export default function ParticleSphere({ className, fullscreen = false }: Partic
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.1;
-      renderer.setClearColor(0x000000, 0); // Transparent background
+      renderer.setClearColor(0x000000, 0);
+      renderer.setClearAlpha(0);
+      const canvasEl = renderer.domElement as HTMLCanvasElement;
+      canvasEl.style.background = 'transparent';
+      // Blend the sphere over the starfield so any black areas become transparent visually
+      if (!fullscreen) {
+        canvasEl.style.mixBlendMode = 'screen';
+      }
       container.appendChild(renderer.domElement);
 
       // Controls setup
       controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
       controls.dampingFactor = 0.05;
-      controls.minDistance = 5;
-      controls.maxDistance = 80;
+      controls.enableZoom = false;
+      // Lock the camera distance so the sphere size stays constant while preserving the initial positioning
+      const camDistance = camera.position.length();
+      controls.minDistance = camDistance;
+      controls.maxDistance = camDistance;
       controls.autoRotate = true;
       controls.autoRotateSpeed = 0.3;
 
@@ -227,8 +242,8 @@ export default function ParticleSphere({ className, fullscreen = false }: Partic
           starPositions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
           starPositions[i3 + 2] = radius * Math.cos(phi);
           
-          // Random sizes
-          starSizes[i] = Math.random() * 0.8 + 0.2;
+          // Random sizes – make stars a bit larger overall for visibility
+          starSizes[i] = Math.random() * 1.5 + 0.3;
           
           // Random colors with slight blue tint
           starColors[i3] = 0.8 + Math.random() * 0.2;     // R
@@ -273,18 +288,6 @@ export default function ParticleSphere({ className, fullscreen = false }: Partic
         const starField = new THREE.Points(starGeometry, starMaterial);
         scene.add(starField);
       }
-
-      // Post-processing
-      if (!container) return;
-      composer = new EffectComposer(renderer);
-      composer.addPass(new RenderPass(scene, camera));
-      bloomPass = new UnrealBloomPass(
-        new THREE.Vector2(container.clientWidth, container.clientHeight),
-        CONFIG.bloomStrength,
-        CONFIG.bloomRadius,
-        CONFIG.bloomThreshold
-      );
-      composer.addPass(bloomPass);
 
       // Animation
       const clock = new THREE.Clock();
@@ -334,7 +337,11 @@ export default function ParticleSphere({ className, fullscreen = false }: Partic
           particlesGeometry.attributes.position.needsUpdate = true;
         }
 
-        composer.render(deltaTime);
+        if (fullscreen && composer) {
+          composer.render(deltaTime);
+        } else {
+          renderer.render(scene, camera);
+        }
       }
 
       animate();
@@ -345,7 +352,9 @@ export default function ParticleSphere({ className, fullscreen = false }: Partic
         camera.aspect = container.clientWidth / container.clientHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(container.clientWidth, container.clientHeight);
-        composer.setSize(container.clientWidth, container.clientHeight);
+        if (fullscreen && composer) {
+          composer.setSize(container.clientWidth, container.clientHeight);
+        }
       }
 
       window.addEventListener('resize', onWindowResize);
@@ -353,15 +362,21 @@ export default function ParticleSphere({ className, fullscreen = false }: Partic
       // Cleanup
       return () => {
         window.removeEventListener('resize', onWindowResize);
-        if (container) {
+        if (container && renderer.domElement.parentNode === container) {
           container.removeChild(renderer.domElement);
         }
         renderer.dispose();
-        composer.dispose();
+        if (fullscreen && composer) {
+          composer.dispose();
+        }
       };
     }
 
-    init();
+    // Initialize the scene and grab its cleanup callback so it runs on unmount.
+    const cleanup = init();
+
+    // Return the cleanup function for React to execute when the component unmounts
+    return cleanup;
   }, []);
 
   return (
