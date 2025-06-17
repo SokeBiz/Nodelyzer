@@ -9,6 +9,9 @@ import Highcharts from "highcharts/highmaps";
 import HighchartsReact from "highcharts-react-official";
 import worldMapData from "@highcharts/map-collection/custom/world.geo.json" assert { type: "json" };
 import { countryNameToCode } from '@/lib/countryNameToCode'
+import { parseEthereumDump } from '@/lib/parseEthereum';
+import { parseBitcoinDump } from '@/lib/parseBitcoin';
+import { parseSolanaDump } from '@/lib/parseSolana';
 
 export default function Analyze() {
     const { user, loading } = useAuth();
@@ -29,6 +32,7 @@ export default function Analyze() {
 
     const [points, setPoints] = useState<NodePoint[]>([]);
     const [countryCounts, setCountryCounts] = useState<CountryCount[]>([]);
+    const [torCount, setTorCount] = useState(0);
 
     const countryToCode = (name?: string): string | undefined => {
         if (!name) return undefined;
@@ -41,76 +45,23 @@ export default function Analyze() {
             // No input yet – clear previous results
             setPoints([]);
             setCountryCounts([]);
+            setTorCount(0);
             return;
         }
 
-        const trim = nodeData.trim();
-        const pointsOut: NodePoint[] = [];
-        const counts: Record<string, number> = {};
-
-        // Helper: CSV parser capable of eth dump headers
-        const parseCSV = (raw: string) => {
-            const lines = raw.split(/\r?\n/).filter(l => l.trim());
-            if (lines.length < 2) return;
-            const header = lines[0]
-                .split(/,|;|\t/)
-                .map(h => h.trim().replace(/^"|"$/g, "").toLowerCase());
-            const latIdx = header.findIndex(h => h === "lat" || h === "latitude");
-            const lonIdx = header.findIndex(h => h === "lon" || h === "longitude" || h === "lng");
-            const countryIdx = header.findIndex(h => h === "country");
-            const nameIdx = header.findIndex(h => h === "name" || h === "node id");
-            for (let i = 1; i < lines.length; i++) {
-                const parts = lines[i].split(/,|;|\t/).map(p => p.replace(/^"|"$/g, ""));
-                const countryRaw = countryIdx !== -1 ? parts[countryIdx] : undefined;
-                const code = countryToCode(countryRaw?.toLowerCase());
-                if (code) counts[code] = (counts[code] || 0) + 1;
-
-                if (latIdx !== -1 && lonIdx !== -1) {
-                    const lat = parseFloat(parts[latIdx]);
-                    const lon = parseFloat(parts[lonIdx]);
-                    if (!isNaN(lat) && !isNaN(lon)) {
-                        pointsOut.push({
-                            lat,
-                            lon,
-                            name: nameIdx !== -1 ? parts[nameIdx] : `Node ${i}`,
-                            country: countryRaw?.toLowerCase(),
-                        });
-                    }
-                }
-            }
+        const parserMap: Record<string, (raw: string) => { points: NodePoint[]; counts: CountryCount[]; tor?: number }> = {
+            ethereum: parseEthereumDump,
+            bitcoin: parseBitcoinDump,
+            solana: parseSolanaDump,
         };
 
-        try {
-            if (trim.startsWith("[")) {
-                const arr = JSON.parse(trim);
-                if (Array.isArray(arr)) {
-                    arr.forEach((item: any, idx: number) => {
-                        const countryRaw = item.country ?? item.Country;
-                        const code = countryToCode(typeof countryRaw === "string" ? countryRaw.toLowerCase() : undefined);
-                        if (code) counts[code] = (counts[code] || 0) + 1;
+        const selectedParser = parserMap[network] ?? parseEthereumDump;
+        const { points: pts, counts, tor } = (selectedParser as any)(nodeData);
 
-                        const lat = parseFloat(item.lat ?? item.latitude);
-                        const lon = parseFloat(item.lon ?? item.longitude);
-                        if (!isNaN(lat) && !isNaN(lon)) {
-                            pointsOut.push({
-                                lat,
-                                lon,
-                                name: item.name ?? item["Node Id"] ?? `Node ${idx + 1}`,
-                                country: typeof countryRaw === "string" ? countryRaw.toLowerCase() : undefined,
-                            });
-                        }
-                    });
-                }
-            } else {
-                parseCSV(trim);
-            }
-        } catch (err) {
-            console.error("Failed to parse node data", err);
-        }
-
-        setPoints(pointsOut);
-        setCountryCounts(Object.entries(counts).map(([code, value]) => ({ code, value })));
-    }, [nodeData]);
+        setPoints(pts);
+        setCountryCounts(counts);
+        setTorCount(typeof tor === "number" ? tor : 0);
+    }, [nodeData, network]);
 
     useEffect(() => {
         // Dynamically import the map module only on the client
@@ -136,7 +87,20 @@ export default function Analyze() {
         setFileName(file.name);
         const reader = new FileReader();
         reader.onload = (event) => {
-            setNodeData(event.target?.result as string);
+            const text = event.target?.result as string;
+            // Basic heuristic to auto-select network based on content (only adjust if not already user-selected)
+            const lower = text ?? "";
+            let detected: string | null = null;
+            if (lower.includes("\"protocol_version\"") || (lower.trim().startsWith("{") && lower.includes("\"nodes\""))) {
+                detected = "bitcoin";
+            } else if (lower.includes("\"epoch\"") || lower.includes("\"activated_stake\"")) {
+                detected = "solana";
+            } else {
+                detected = "ethereum";
+            }
+            // Only update if detection differs and the user hasn't already set another network after choosing the file
+            setNetwork(prev => prev === detected ? prev : detected);
+            setNodeData(text);
         };
         reader.readAsText(file);
     };
@@ -285,6 +249,7 @@ export default function Analyze() {
                                 <div>Nakamoto Coefficient: <span className="font-mono">{results ? results.nakamoto : "-"}</span></div>
                                 <div>Connectivity Loss: <span className="font-mono">{results ? results.connectivityLoss : "-"}</span></div>
                                 <div>Countries Represented: <span className="font-mono">{countryCounts.length}</span></div>
+                                <div>Nodes via TOR: <span className="font-mono">{torCount}</span></div>
                             </div>
                         </div>
                         {/* Optimization Suggestion */}
