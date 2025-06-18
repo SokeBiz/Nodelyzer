@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, ChangeEvent, useMemo } from "react";
+import { useEffect, useState, ChangeEvent, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
@@ -25,6 +25,10 @@ export default function Analyze() {
     // Data input state
     const [nodeData, setNodeData] = useState<string>("");
     const [fileName, setFileName] = useState<string>("");
+    // User-defined analysis name (shown only after data is provided)
+    const [analysisName, setAnalysisName] = useState<string>("");
+    // Ref for resetting native file input
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     // Parsed node points and per-country counts (for Highcharts)
     interface NodePoint { name?: string; lat: number; lon: number; country?: string; }
@@ -39,7 +43,36 @@ export default function Analyze() {
         return countryNameToCode[name.trim().toLowerCase()];
     };
 
-    // Try to parse nodeData whenever it changes (supports JSON array or CSV with headers)
+    // Load saved analysis state on mount
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const saved = localStorage.getItem("analysisState");
+        if (!saved) return;
+        try {
+            const parsed = JSON.parse(saved);
+            if (parsed.nodeData) setNodeData(parsed.nodeData);
+            if (parsed.analysisName) setAnalysisName(parsed.analysisName);
+            if (parsed.network) setNetwork(parsed.network);
+        } catch (_) {
+            // ignore parse errors
+        }
+    }, []);
+
+    // Persist analysis state whenever any key value changes
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        if (!nodeData.trim() && !analysisName.trim()) {
+            localStorage.removeItem("analysisState");
+            return;
+        }
+        const payload = JSON.stringify({
+            nodeData,
+            analysisName,
+            network,
+        });
+        localStorage.setItem("analysisState", payload);
+    }, [nodeData, analysisName, network]);
+
     useEffect(() => {
         if (!nodeData.trim()) {
             // No input yet – clear previous results
@@ -121,6 +154,23 @@ export default function Analyze() {
         }, 1200);
     };
 
+    // Clear uploaded/pasted node data and reset related state
+    const handleClearData = () => {
+        setNodeData("");
+        setFileName("");
+        setAnalysisName("");
+        setPoints([]);
+        setCountryCounts([]);
+        setTorCount(0);
+        if (typeof window !== "undefined") {
+            localStorage.removeItem("analysisState");
+        }
+        // reset file input element value so same file can be re-selected if needed
+        if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+        }
+    };
+
     // Highcharts map options derived from current points / countryCounts
     const mapOptions = useMemo(() => ({
         chart: {
@@ -185,10 +235,24 @@ export default function Analyze() {
                         <div className="flex flex-col gap-6 flex-shrink-0 w-full md:w-80 bg-white/5 rounded-xl border border-white/10 p-6 h-fit md:h-auto mb-4 md:mb-0">
                             <div>
                                 <label className="block text-base font-medium text-gray-300 mb-2">Node Data Input</label>
+                                {/* File chooser + clear data inline */}
+                                <div className="flex items-center gap-3 mb-2">
+                                    <label htmlFor="file-upload" className="text-sm font-semibold bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 cursor-pointer">Choose File</label>
+                                    {nodeData.trim() && (
+                                        <button
+                                            onClick={handleClearData}
+                                            className="text-red-400 text-sm hover:underline"
+                                        >
+                                            Clear Data
+                                        </button>
+                                    )}
+                                </div>
                                 <input
+                                    id="file-upload"
+                                    ref={fileInputRef}
                                     type="file"
                                     accept=".json,.csv,.txt"
-                                    className="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 mb-2"
+                                    className="hidden"
                                     onChange={handleFileUpload}
                                 />
                                 <span className="text-xs text-gray-400">{fileName ? `Loaded: ${fileName}` : "Upload a node data file (JSON, CSV, or TXT)"}</span>
@@ -198,6 +262,16 @@ export default function Analyze() {
                                     value={nodeData}
                                     onChange={e => setNodeData(e.target.value)}
                                 />
+                                {/* Analysis name – shown only after data is present */}
+                                {nodeData.trim() && (
+                                    <input
+                                        type="text"
+                                        className="w-full mt-3 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder="Analysis name"
+                                        value={analysisName}
+                                        onChange={e => setAnalysisName(e.target.value)}
+                                    />
+                                )}
                             </div>
                             {/* Scenario Selection */}
                             <div>
@@ -238,6 +312,7 @@ export default function Analyze() {
                                 options={mapOptions}
                                 containerProps={{ style: { width: '100%', minWidth: '300px' } }}
                             />
+                        
                         </div>
                     </CardContent>
                     <CardFooter className="flex flex-col md:flex-row gap-8 items-stretch md:items-start px-12 pb-8 pt-6">

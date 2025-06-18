@@ -4,8 +4,23 @@
 // import NodeMap from "./NodeMap";
 import Link from "next/link";
 import ParticleSphere from "./ParticleSphere";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function HeroSection() {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const router = useRouter();
+
+  const handleCreate = () => {
+    setDialogOpen(false);
+    router.push("/analyze");
+  };
+
+  const handleExisting = () => {
+    // Placeholder – in future we might open a list of saved analyses
+    setDialogOpen(false);
+  };
+
   return (
     <section className="relative pt-28 pb-16 px-4 bg-gradient-to-b from-slate-950 to-slate-900 overflow-hidden">
       {/* Fullscreen starfield background */}
@@ -23,9 +38,12 @@ export default function HeroSection() {
               Nodelyzer helps you identify and mitigate vulnerabilities in blockchain node networks with advanced visualization and real-time monitoring.
             </p>
             <div className="mt-8 flex flex-col sm:flex-row gap-4 items-center justify-center lg:justify-start">
-              <Link href="/analyze" className="bg-gradient-to-r from-blue-500 to-cyan-400 hover:from-blue-600 hover:to-cyan-500 text-white text-lg py-3 px-6 rounded-md transition-colors duration-200 text-center w-full sm:w-auto">
+              <button
+                onClick={() => setDialogOpen(true)}
+                className="bg-gradient-to-r from-blue-500 to-cyan-400 hover:from-blue-600 hover:to-cyan-500 text-white text-lg py-3 px-6 rounded-md transition-colors duration-200 text-center w-full sm:w-auto"
+              >
                 Start Analyzing
-              </Link>
+              </button>
               <Link href="#" className="border border-slate-700 hover:bg-slate-800 text-white text-lg py-3 px-6 rounded-md transition-colors duration-200 text-center w-full sm:w-auto">
                 Learn
               </Link>
@@ -54,6 +72,31 @@ export default function HeroSection() {
           </div>
         </div>
       </div>
+
+      {/* Simple modal dialog */}
+      {dialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/80" onClick={() => setDialogOpen(false)} />
+          <div className="relative bg-slate-800 rounded-xl p-8 w-[90%] max-w-lg border border-white/10 shadow-xl space-y-6">
+            <h2 className="text-2xl font-bold text-white text-center">Start Analysis</h2>
+            <p className="text-slate-300 text-center">Would you like to create a new analysis or open an existing one?</p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleCreate}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-medium"
+              >
+                Create New
+              </button>
+              <button
+                onClick={handleExisting}
+                className="w-full border border-white/20 text-white py-2 rounded-lg font-medium hover:bg-white/10"
+              >
+                Open Existing
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
