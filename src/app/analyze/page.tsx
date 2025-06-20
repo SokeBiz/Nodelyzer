@@ -12,6 +12,8 @@ import { countryNameToCode } from '@/lib/countryNameToCode'
 import { parseEthereumDump } from '@/lib/parseEthereum';
 import { parseBitcoinDump } from '@/lib/parseBitcoin';
 import { parseSolanaDump } from '@/lib/parseSolana';
+import { giniCoefficient } from '@/lib/utils';
+import { useAnalysisDialog } from '@/context/AnalysisDialogContext';
 
 export default function Analyze() {
     const { user, loading } = useAuth();
@@ -42,6 +44,13 @@ export default function Analyze() {
         if (!name) return undefined;
         return countryNameToCode[name.trim().toLowerCase()];
     };
+
+    // Open the start-analysis dialog when page loads
+    const { openDialog } = useAnalysisDialog();
+
+    useEffect(() => {
+        openDialog();
+    }, []);
 
     // Load saved analysis state on mount
     useEffect(() => {
@@ -138,20 +147,25 @@ export default function Analyze() {
         reader.readAsText(file);
     };
 
-    // Placeholder: handle analysis
+    // Run the analysis for the selected scenario/network
     const handleAnalyze = () => {
         setAnalyzing(true);
+
+        // Perform calculations in a timeout to keep UI responsive (simulate async)
         setTimeout(() => {
+            // Gini coefficient based on geographic distribution
+            const gini = giniCoefficient(countryCounts.map(c => c.value));
+
+            // TODO: Replace placeholder calculations for Nakamoto & connectivity when implemented
             setResults({
-                gini: 0.42,
-                nakamoto: 7,
-                suggestion: "Add 3 nodes in South America to improve decentralization.",
-                connectivityLoss: "12% nodes offline in scenario."
-                // calculate gini
-                // calculate nakamoto
+                gini: Number(gini.toFixed(3)),
+                nakamoto: null,
+                suggestion: "Run full analysis to get optimization suggestions.",
+                connectivityLoss: "-"
             });
+
             setAnalyzing(false);
-        }, 1200);
+        }, 50);
     };
 
     // Clear uploaded/pasted node data and reset related state
@@ -162,6 +176,7 @@ export default function Analyze() {
         setPoints([]);
         setCountryCounts([]);
         setTorCount(0);
+        setResults(null);
         if (typeof window !== "undefined") {
             localStorage.removeItem("analysisState");
         }

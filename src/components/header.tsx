@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import React from "react";
 import Link from "next/link";
 import { Menu, X, LogOut } from "lucide-react";
 import { useAuthState, useSignOut } from "react-firebase-hooks/auth";
@@ -23,11 +24,8 @@ export default function Header() {
     return "";
   };
 
-
-
   const { user } = useAuth()
   console.log(user)
-
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-slate-900/80 backdrop-blur-md border-b border-slate-800">
@@ -50,6 +48,9 @@ export default function Header() {
           </Link>
           <Link href="#security" className="text-slate-300 hover:text-white transition-colors">
             Security
+          </Link>
+          <Link href="/analyze" className="text-slate-300 hover:text-white transition-colors">
+            Analyze
           </Link>
         </nav>
 
