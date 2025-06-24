@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, ChangeEvent, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
 import Header from "@/components/header";
@@ -14,16 +14,22 @@ import { parseBitcoinDump } from '@/lib/parseBitcoin';
 import { parseSolanaDump } from '@/lib/parseSolana';
 import { giniCoefficient } from '@/lib/utils';
 import { useAnalysisDialog } from '@/context/AnalysisDialogContext';
+import { saveAnalysis, getAnalysisById, updateAnalysis } from '@/lib/analysisService';
+import { toast } from 'sonner';
 
 export default function Analyze() {
     const { user, loading } = useAuth();
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const analysisIdParam = searchParams.get('id');
+    const [analysisId, setAnalysisId] = useState<string | null>(analysisIdParam);
 
     // Scenario selection state
     const [scenario, setScenario] = useState("region");
     const [network, setNetwork] = useState("bitcoin");
     const [analyzing, setAnalyzing] = useState(false);
     const [results, setResults] = useState<any>(null);
+    const [saving, setSaving] = useState(false);
     // Data input state
     const [nodeData, setNodeData] = useState<string>("");
     const [fileName, setFileName] = useState<string>("");
@@ -46,15 +52,41 @@ export default function Analyze() {
     };
 
     // Open the start-analysis dialog when page loads
-    const { openDialog } = useAnalysisDialog();
+    const { openDialog, closeDialog } = useAnalysisDialog();
 
+    // Show dialog only when there is no node data
     useEffect(() => {
-        openDialog();
-    }, []);
+        if (nodeData.trim()) {
+            closeDialog();
+        } else {
+            openDialog();
+        }
+    }, [nodeData]);
 
     // Load saved analysis state on mount
     useEffect(() => {
         if (typeof window === "undefined") return;
+        // If analysisId query param is present, attempt to load from Firestore first
+        if (analysisIdParam) {
+            (async () => {
+                const rec = await getAnalysisById(analysisIdParam);
+                if (rec) {
+                    setAnalysisId(rec.id || analysisIdParam);
+                    setNodeData(rec.nodeData || "");
+                    setAnalysisName(rec.name || "");
+                    setNetwork(rec.network || "bitcoin");
+                    if (rec.metrics) {
+                        setResults({
+                            gini: rec.metrics.gini ?? null,
+                            nakamoto: rec.metrics.nakamoto ?? null,
+                            connectivityLoss: rec.metrics.connectivityLoss ?? "-",
+                            suggestion: "Run full analysis to get optimization suggestions."
+                        });
+                    }
+                }
+            })();
+        }
+
         const saved = localStorage.getItem("analysisState");
         if (!saved) return;
         try {
@@ -65,7 +97,7 @@ export default function Analyze() {
         } catch (_) {
             // ignore parse errors
         }
-    }, []);
+    }, [analysisIdParam]);
 
     // Persist analysis state whenever any key value changes
     useEffect(() => {
@@ -152,20 +184,64 @@ export default function Analyze() {
         setAnalyzing(true);
 
         // Perform calculations in a timeout to keep UI responsive (simulate async)
-        setTimeout(() => {
-            // Gini coefficient based on geographic distribution
+        setTimeout(async () => {
+            // Calculate metrics
             const gini = giniCoefficient(countryCounts.map(c => c.value));
 
-            // TODO: Replace placeholder calculations for Nakamoto & connectivity when implemented
-            setResults({
+            const resultObj = {
                 gini: Number(gini.toFixed(3)),
                 nakamoto: null,
                 suggestion: "Run full analysis to get optimization suggestions.",
                 connectivityLoss: "-"
-            });
+            };
+
+            setResults(resultObj);
 
             setAnalyzing(false);
         }, 50);
+    };
+
+    // Explicit save handler (when user clicks "Save Analysis")
+    const handleSave = async () => {
+        if (!user || !nodeData.trim()) return;
+        setSaving(true);
+        try {
+            if (analysisId) {
+                // update existing
+                await updateAnalysis(analysisId, {
+                    name: analysisName || "Untitled Analysis",
+                    network,
+                    nodeData,
+                    metrics: results ? {
+                        gini: results.gini,
+                        nakamoto: results.nakamoto,
+                        connectivityLoss: results.connectivityLoss
+                    } : undefined,
+                });
+                toast.success("Analysis updated");
+            } else {
+                const newId = await saveAnalysis({
+                    userId: user.uid,
+                    name: analysisName || "Untitled Analysis",
+                    network,
+                    nodeData,
+                    metrics: results ? {
+                        gini: results.gini,
+                        nakamoto: results.nakamoto,
+                        connectivityLoss: results.connectivityLoss
+                    } : undefined,
+                });
+                setAnalysisId(newId);
+                // update url so subsequent saves update same doc
+                router.replace(`/analyze?id=${newId}`);
+                toast.success("Analysis saved successfully");
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error("Failed to save analysis");
+        } finally {
+            setSaving(false);
+        }
     };
 
     // Clear uploaded/pasted node data and reset related state
@@ -316,6 +392,14 @@ export default function Analyze() {
                                     className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
                                 >
                                     {analyzing ? "Analyzing..." : "Run Analysis"}
+                                </button>
+
+                                <button
+                                    onClick={handleSave}
+                                    disabled={saving || !nodeData.trim()}
+                                    className="w-full bg-green-600 text-white py-2 rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                                >
+                                    {saving ? "Saving..." : "Save Analysis"}
                                 </button>
                             </div>
                         </div>
