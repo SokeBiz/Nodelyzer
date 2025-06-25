@@ -42,3 +42,6 @@ next-env.d.ts
 
 # project documentation
 PROJECT
+
+# Exclude local ThreeJS prototypes
+ThreeJS/

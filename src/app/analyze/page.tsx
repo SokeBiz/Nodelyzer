@@ -344,7 +344,16 @@ export default function Analyze() {
                                     type="file"
                                     accept=".json,.csv,.txt"
                                     className="hidden"
-                                    onChange={handleFileUpload}
+                                    multiple={false}
+                                    onChange={e => {
+                                        const file = e.target.files?.[0];
+                                        if (file && file.size > 1024 * 1024) { // 1MB = 1024*1024 bytes
+                                            alert("File size exceeds 1MB. Please select a smaller file.");
+                                            e.target.value = ""; // reset file input
+                                            return;
+                                        }
+                                        handleFileUpload(e);
+                                    }}
                                 />
                                 <span className="text-xs text-gray-400">{fileName ? `Loaded: ${fileName}` : "Upload a node data file (JSON, CSV, or TXT)"}</span>
                                 <textarea
