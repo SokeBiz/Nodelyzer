@@ -20,9 +20,7 @@ export function parseBitcoinDump(raw: string): { points: NodePoint[]; counts: Co
   };
 
   const push = (p: NodePoint) => {
-    if (!isNaN(p.lat) && !isNaN(p.lon) && !(p.lat === 0 && p.lon === 0)) {
-      points.push(p);
-    }
+    points.push(p);
   };
   const strip = (s: string) => s.replace(/^"|"$/g, "");
 
@@ -47,11 +45,16 @@ export function parseBitcoinDump(raw: string): { points: NodePoint[]; counts: Co
       const isTorAsn = typeof asnStr === "string" && asnStr.trim().toUpperCase() === "TOR";
       const isTorCountry = typeof countryRaw === "string" && countryRaw.trim().toUpperCase() === "TOR";
       if (isTorAddress || isTorAsn || isTorCountry) torCount++;
-      if (latIdx !== -1 && lonIdx !== -1) {
-        const lat = parseFloat(parts[latIdx]);
-        const lon = parseFloat(parts[lonIdx]);
-        if (!isNaN(lat) && !isNaN(lon)) push({ lat, lon, country: countryRaw, name: `Node ${i}` });
+      const lat = latIdx !== -1 ? parseFloat(parts[latIdx]) : NaN;
+      const lon = lonIdx !== -1 ? parseFloat(parts[lonIdx]) : NaN;
+      let code: string | undefined;
+      const raw = countryRaw?.trim() ?? '';
+      if (raw.length === 2) {
+        code = raw.toLowerCase();
+      } else {
+        code = countryNameToCode[raw.toLowerCase()] ?? undefined;
       }
+      push({ lat, lon, country: code ?? raw.toLowerCase(), name: `Node ${i}` });
     }
   };
 
@@ -63,9 +66,16 @@ export function parseBitcoinDump(raw: string): { points: NodePoint[]; counts: Co
           const countryRaw = it.country ?? it.cc;
           add(countryRaw);
           if (typeof countryRaw === "string" && countryRaw.toUpperCase() === "TOR") torCount++;
-          const lat = parseFloat(it.lat ?? it.latitude);
-          const lon = parseFloat(it.lon ?? it.longitude);
-          if (!isNaN(lat) && !isNaN(lon)) push({ lat, lon, country: countryRaw, name: it.name ?? `Node ${idx+1}` });
+          const lat = parseFloat(it.lat ?? it.latitude) ?? NaN;
+          const lon = parseFloat(it.lon ?? it.longitude) ?? NaN;
+          let code: string | undefined;
+          const raw = (countryRaw ?? '').trim();
+          if (raw.length === 2) {
+            code = raw.toLowerCase();
+          } else {
+            code = countryNameToCode[raw.toLowerCase()] ?? undefined;
+          }
+          push({ lat, lon, country: code ?? raw.toLowerCase(), name: it.name ?? `Node ${idx+1}` });
         });
       }
     } else if (trim.startsWith("{")) {
@@ -76,8 +86,8 @@ export function parseBitcoinDump(raw: string): { points: NodePoint[]; counts: Co
           // In the Bitnodes schema country_code is usually at index 7, but TOR nodes often
           // have it blank and instead store the literal "TOR" at index 11. We examine both.
           const countryRaw = arr[7] ?? arr[11];
-          const lat = parseFloat(arr[8]);
-          const lon = parseFloat(arr[9]);
+          const lat = parseFloat(arr[8]) ?? NaN;
+          const lon = parseFloat(arr[9]) ?? NaN;
 
           // Keep country tally (even if undefined)
           add(countryRaw);
@@ -87,10 +97,14 @@ export function parseBitcoinDump(raw: string): { points: NodePoint[]; counts: Co
           const isTorCountry  = typeof countryRaw === "string" && countryRaw.trim().toUpperCase() === "TOR";
           const isTorAltField = typeof arr[11] === "string" && arr[11].trim().toUpperCase() === "TOR";
           if (isTorAddress || isTorCountry || isTorAltField) torCount++;
-
-          if (!isNaN(lat) && !isNaN(lon)) {
-            push({ lat, lon, country: countryRaw, name: `Node ${idx + 1}` });
+          let code: string | undefined;
+          const raw = (countryRaw ?? '').trim();
+          if (raw.length === 2) {
+            code = raw.toLowerCase();
+          } else {
+            code = countryNameToCode[raw.toLowerCase()] ?? undefined;
           }
+          push({ lat, lon, country: code ?? raw.toLowerCase(), name: `Node ${idx + 1}` });
         });
       } else {
         parseCSV(trim);

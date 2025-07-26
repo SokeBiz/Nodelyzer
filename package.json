@@ -12,6 +12,7 @@
     "@highcharts/map-collection": "^2.3.0",
     "@react-three/drei": "^10.0.6",
     "@types/three": "^0.176.0",
+    "axios": "^1.11.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "firebase": "^11.6.1",

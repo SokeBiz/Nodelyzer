@@ -18,6 +18,8 @@ import { saveAnalysis, getAnalysisById, updateAnalysis } from '@/lib/analysisSer
 import { toast } from 'sonner';
 
 export default function Analyze() {
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+    // Then in fetch: fetch(`${BACKEND_URL}/simulate-failure`, ...)
     const { user, loading } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -25,8 +27,9 @@ export default function Analyze() {
     const [analysisId, setAnalysisId] = useState<string | null>(analysisIdParam);
 
     // Scenario selection state
-    const [scenario, setScenario] = useState("region");
+    const [scenario, setScenario] = useState("");  // Default to empty for Overview
     const [network, setNetwork] = useState("bitcoin");
+    const [target, setTarget] = useState('US');
     const [analyzing, setAnalyzing] = useState(false);
     const [results, setResults] = useState<any>(null);
     const [saving, setSaving] = useState(false);
@@ -45,6 +48,10 @@ export default function Analyze() {
     const [points, setPoints] = useState<NodePoint[]>([]);
     const [countryCounts, setCountryCounts] = useState<CountryCount[]>([]);
     const [torCount, setTorCount] = useState(0);
+
+    // Near your other states (e.g., after const [results, setResults] = useState<any>(null);)
+    const [suggestions, setSuggestions] = useState<string[]>([]);
+    const [optimizing, setOptimizing] = useState(false);
 
     const countryToCode = (name?: string): string | undefined => {
         if (!name) return undefined;
@@ -180,25 +187,59 @@ export default function Analyze() {
     };
 
     // Run the analysis for the selected scenario/network
-    const handleAnalyze = () => {
+    const handleAnalyze = async () => {  // Make it async
+        if (!nodeData.trim()) return;  // Optional: Skip if no data
+        
         setAnalyzing(true);
-
-        // Perform calculations in a timeout to keep UI responsive (simulate async)
-        setTimeout(async () => {
-            // Calculate metrics
-            const gini = giniCoefficient(countryCounts.map(c => c.value));
-
-            const resultObj = {
-                gini: Number(gini.toFixed(3)),
-                nakamoto: null,
-                suggestion: "Run full analysis to get optimization suggestions.",
-                connectivityLoss: "-"
-            };
-
-            setResults(resultObj);
-
+        
+        try {
+            // Prepare data in the format backend expects (adapt your points to include country, etc.)
+            let nodeList = points.map(p => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown' }));  // Use your points state
+            if (nodeList.length === 0) {
+                console.warn('Points is empty; attempting to re-parse nodeData');
+                // Fallback: Re-parse if points not set (timing issue)
+                const parserMap: Record<string, (raw: string) => { points: NodePoint[]; counts: CountryCount[]; tor?: number }> = { ethereum: parseEthereumDump, bitcoin: parseBitcoinDump, solana: parseSolanaDump };
+                const selectedParser = parserMap[network] ?? parseEthereumDump;
+                const { points: fallbackPoints } = selectedParser(nodeData);
+                nodeList = fallbackPoints.map((p: NodePoint) => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown' }));
+            }
+            
+            const normalizedTarget = countryNameToCode[target.toLowerCase()] ?? target.toLowerCase();
+            
+            console.log('Preparing to send', nodeList.length, 'nodes to backend');
+            console.log('Sample node:', nodeList[0]);
+            const requestBody = JSON.stringify({
+                nodes: nodeList,
+                scenario: scenario,
+                target: normalizedTarget
+            });
+            console.log('Request body size:', requestBody.length);
+            
+            const response = await fetch(`${BACKEND_URL}/simulate-failure`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: requestBody
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Backend error');
+            }
+            
+            const result = await response.json();
+            setResults({
+                gini: result.gini,
+                nakamoto: result.nakamoto,
+                connectivityLoss: result.connectivity_loss,
+                failed_nodes: result.failed_nodes,  // Add this for display
+                suggestion: "Analysis complete."  // We'll update with optimize later
+            });
+        } catch (error: any) {
+            console.error(error);
+            toast.error(error.message || "Failed to run analysis");
+        } finally {
             setAnalyzing(false);
-        }, 50);
+        }
     };
 
     // Explicit save handler (when user clicks "Save Analysis")
@@ -262,6 +303,45 @@ export default function Analyze() {
         }
     };
 
+    // Add a new `handleOptimize` function (below `handleAnalyze`):
+    const handleOptimize = async () => {
+        setOptimizing(true);
+        
+        try {
+            let nodeList = points.map(p => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown' }));
+            if (nodeList.length === 0) {
+                console.warn('Points is empty; attempting to re-parse nodeData');
+                const parserMap: Record<string, (raw: string) => { points: NodePoint[]; counts: CountryCount[]; tor?: number }> = { ethereum: parseEthereumDump, bitcoin: parseBitcoinDump, solana: parseSolanaDump };
+                const selectedParser = parserMap[network] ?? parseEthereumDump;
+                const { points: fallbackPoints } = selectedParser(nodeData);
+                nodeList = fallbackPoints.map((p: NodePoint) => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown' }));
+            }
+            
+            const response = await fetch(`${BACKEND_URL}/optimize`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nodes: nodeList })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Backend error');
+            }
+            
+            const result = await response.json();
+            setSuggestions(result.suggestions);  // Update state
+            if (results) {
+                setResults({ ...results, suggestion: result.suggestions.join(' ') });  // Combine with existing results
+            }
+            toast.success("Optimization suggestions generated");
+        } catch (error: any) {
+            console.error(error);
+            toast.error(error.message || "Failed to optimize");
+        } finally {
+            setOptimizing(false);
+        }
+    };
+
     // Highcharts map options derived from current points / countryCounts
     const mapOptions = useMemo(() => ({
         chart: {
@@ -315,10 +395,10 @@ export default function Analyze() {
             <Header />
             <main className="bg-gradient-to-b from-slate-950 to-slate-900 min-h-screen w-full flex flex-col items-stretch justify-stretch p-0 m-0 overflow-x-hidden pt-8">
                 <Card className="flex flex-col flex-1 h-[calc(100vh-5rem)] w-full rounded-none border-none shadow-none bg-transparent">
-                    <CardHeader className="px-12 pt-8 pb-4">
+                    <CardHeader className="px-12 pt-8">
                         <CardTitle className="text-3xl text-white">Network Failure Analysis</CardTitle>
-                        <CardDescription className="max-w-2xl text-lg mt-2">
-                            Simulate node failures and analyze network resilience. Select a scenario and run analysis to see the impact and get optimization suggestions.
+                        <CardDescription className="max-w-2xl text-lg mt-1">
+                            Analyze node failures and network resilience. Select a scenario and run analysis to see the impact and get optimization suggestions.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="flex-1 flex flex-col md:flex-row gap-8 px-4 md:px-12 pb-0 overflow-hidden">
@@ -347,17 +427,17 @@ export default function Analyze() {
                                     multiple={false}
                                     onChange={e => {
                                         const file = e.target.files?.[0];
-                                        if (file && file.size > 1024 * 1024) { // 1MB = 1024*1024 bytes
-                                            alert("File size exceeds 1MB. Please select a smaller file.");
-                                            e.target.value = ""; // reset file input
-                                            return;
-                                        }
+                                        // if (file && file.size > 1024 * 1024) { // 1MB = 1024*1024 bytes
+                                        //     alert("File size exceeds 1MB. Please select a smaller file.");
+                                        //     e.target.value = ""; // reset file input
+                                        //     return;
+                                        // }
                                         handleFileUpload(e);
                                     }}
                                 />
                                 <span className="text-xs text-gray-400">{fileName ? `Loaded: ${fileName}` : "Upload a node data file (JSON, CSV, or TXT)"}</span>
                                 <textarea
-                                    className="w-full mt-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[80px]"
+                                    className="w-full mt-1 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[50px]"
                                     placeholder="Or paste node data here..."
                                     value={nodeData}
                                     onChange={e => setNodeData(e.target.value)}
@@ -381,9 +461,11 @@ export default function Analyze() {
                                     value={scenario}
                                     onChange={e => setScenario(e.target.value)}
                                 >
+                                    <option value="">Overview (No Failure)</option>
                                     <option value="region">Regional Outage</option>
                                     <option value="cloud">Cloud Provider Failure</option>
-                                    <option value="attack">Targeted Attack</option>
+                                    {/* <option value="attack">Targeted Attack</option> */}
+                                    <option value="51">51% Attack</option>
                                 </select>
                                 <label className="block text-base font-medium text-gray-300 mb-2">Network</label>
                                 <select
@@ -395,21 +477,37 @@ export default function Analyze() {
                                     <option value="ethereum">Ethereum</option>
                                     <option value="solana">Solana</option>
                                 </select>
+                                {scenario && (  // Conditionally show target input if scenario is selected
+                                    <input
+                                        type="text"
+                                        className="w-full mt-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder={`Target (e.g., ${scenario === 'region' ? 'US' : scenario === 'cloud' ? 'AWS' : 'Entity'})`}
+                                        value={target}
+                                        onChange={e => setTarget(e.target.value)}
+                                    />
+                                )}
                                 <button
                                     onClick={handleAnalyze}
                                     disabled={analyzing}
-                                    className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                                    className="w-full bg-blue-600 text-white py-1 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
                                 >
                                     {analyzing ? "Analyzing..." : "Run Analysis"}
                                 </button>
-
+                                <button
+                                    onClick={handleOptimize}
+                                    disabled={optimizing || !nodeData.trim()}
+                                    className="w-full bg-purple-600 text-white py-1 rounded-lg font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                                >
+                                    {optimizing ? "Optimizing..." : "Get Optimization Suggestions"}
+                                </button>
                                 <button
                                     onClick={handleSave}
                                     disabled={saving || !nodeData.trim()}
-                                    className="w-full bg-green-600 text-white py-2 rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                                    className="w-full bg-green-600 text-white py-1 rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
                                 >
                                     {saving ? "Saving..." : "Save Analysis"}
                                 </button>
+
                             </div>
                         </div>
                         {/* Map Visualization with Highcharts */}
@@ -428,18 +526,19 @@ export default function Analyze() {
                         <div className="flex-1 bg-white/5 rounded-xl border border-white/10 p-6 min-w-[220px]">
                             <div className="text-xl font-bold mb-2 text-white">Metrics</div>
                             <div className="text-gray-300 text-base space-y-1">
-                                <div>Gini Coefficient: <span className="font-mono">{results ? results.gini : "-"}</span></div>
+                                <div>Gini Coefficient: <span className="font-mono">{results ? results.gini.toFixed(3) : "-"}</span></div>
                                 <div>Nakamoto Coefficient: <span className="font-mono">{results ? results.nakamoto : "-"}</span></div>
                                 <div>Connectivity Loss: <span className="font-mono">{results ? results.connectivityLoss : "-"}</span></div>
                                 <div>Countries Represented: <span className="font-mono">{countryCounts.length}</span></div>
                                 <div>Nodes via TOR: <span className="font-mono">{torCount}</span></div>
+                                <div>Failed Nodes: <span className="font-mono">{results ? results.failed_nodes : "-"}</span></div>
                             </div>
                         </div>
                         {/* Optimization Suggestion */}
                         <div className="flex-1 bg-white/5 rounded-xl border border-white/10 p-6 min-w-[220px]">
                             <div className="text-xl font-bold mb-2 text-white">Optimization Suggestion</div>
                             <div className="text-gray-300 text-base">
-                                {results ? results.suggestion : "Run an analysis to get suggestions."}
+                                {suggestions.length > 0 ? suggestions.map((s, i) => <p key={i}>{s}</p>) : (results ? results.suggestion : "Run an analysis to get suggestions.")}
                             </div>
                         </div>
                     </CardFooter>

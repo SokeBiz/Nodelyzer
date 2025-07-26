@@ -18,7 +18,7 @@ export function parseEthereumDump(raw: string): { points: NodePoint[]; counts: C
   };
 
   const pushPoint = (p: NodePoint) => {
-    if (!isNaN(p.lat) && !isNaN(p.lon)) points.push(p);
+    points.push(p);
   };
 
   const strip = (s: string) => s.replace(/^"|"$/g, "");
@@ -35,18 +35,16 @@ export function parseEthereumDump(raw: string): { points: NodePoint[]; counts: C
       const parts = lines[i].split(/,|;|\t/).map(strip);
       const countryRaw = countryIdx !== -1 ? parts[countryIdx] : undefined;
       addCountry(countryRaw);
-      if (latIdx !== -1 && lonIdx !== -1) {
-        const lat = parseFloat(parts[latIdx]);
-        const lon = parseFloat(parts[lonIdx]);
-        if (!isNaN(lat) && !isNaN(lon)) {
-          pushPoint({
-            lat,
-            lon,
-            name: nameIdx !== -1 ? parts[nameIdx] : `Node ${i}`,
-            country: countryRaw?.toLowerCase(),
-          });
-        }
-      }
+      const lat = latIdx !== -1 ? parseFloat(parts[latIdx]) : NaN;
+      const lon = lonIdx !== -1 ? parseFloat(parts[lonIdx]) : NaN;
+      const name = nameIdx !== -1 ? parts[nameIdx] : `Node ${i}`;
+      const code = countryNameToCode[countryRaw?.toLowerCase() ?? ""];
+      pushPoint({
+        lat,
+        lon,
+        name,
+        country: code ?? countryRaw?.toLowerCase(),
+      });
     }
   };
 
@@ -59,14 +57,13 @@ export function parseEthereumDump(raw: string): { points: NodePoint[]; counts: C
           addCountry(typeof countryRaw === "string" ? countryRaw : undefined);
           const lat = parseFloat(item.lat ?? item.latitude);
           const lon = parseFloat(item.lon ?? item.longitude);
-          if (!isNaN(lat) && !isNaN(lon)) {
-            pushPoint({
-              lat,
-              lon,
-              name: item.name ?? item["Node Id"] ?? `Node ${idx + 1}`,
-              country: typeof countryRaw === "string" ? countryRaw.toLowerCase() : undefined,
-            });
-          }
+          const code = countryNameToCode[(countryRaw ?? "").toLowerCase()];
+          pushPoint({
+            lat,
+            lon,
+            name: item.name ?? item["Node Id"] ?? `Node ${idx + 1}`,
+            country: code ?? (typeof countryRaw === "string" ? countryRaw.toLowerCase() : undefined),
+          });
         });
       }
     } else {
