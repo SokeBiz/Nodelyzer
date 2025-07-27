@@ -211,14 +211,14 @@ export default function Analyze() {
         
         try {
             // Prepare data in the format backend expects (adapt your points to include country, etc.)
-            let nodeList = points.map(p => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown', stake: p.stake }));  // Use your points state
+            let nodeList = points.map(p => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown', stake: p.stake, provider: p.provider }));
             if (nodeList.length === 0) {
                 console.warn('Points is empty; attempting to re-parse nodeData');
                 // Fallback: Re-parse if points not set (timing issue)
                 const parserMap: Record<string, (raw: string) => { points: NodePoint[]; counts: CountryCount[]; tor?: number }> = { ethereum: parseEthereumDump, bitcoin: parseBitcoinDump, solana: parseSolanaDump };
                 const selectedParser = parserMap[network] ?? parseEthereumDump;
-                const { points: fallbackPoints } = selectedParser(nodeData);
-                nodeList = fallbackPoints.map((p: NodePoint) => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown', stake: p.stake }));
+                const { points: fallbackPoints } = (selectedParser as any)(nodeData);
+                nodeList = fallbackPoints.map((p: NodePoint) => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown', stake: p.stake, provider: p.provider }));
             }
             
             const normalizedTargets = (scenario === 'cloud' ? providerTargets : targets).map(code => code.toLowerCase());
@@ -250,9 +250,12 @@ export default function Analyze() {
                 connectivityLoss: result.connectivity_loss,
                 failed_nodes: result.failed_nodes,  // Add this for display
                 total_nodes: result.total_nodes,
-                suggestion: "Analysis complete."  // We'll update with optimize later
+                suggestion: "Run full analysis to get optimization suggestions."
             });
             setRemainingCountries(result.remaining_countries || 0);
+            
+            // Automatically run optimization
+            await handleOptimize();
         } catch (error: any) {
             console.error(error);
             toast.error(error.message || "Failed to run analysis");
@@ -332,19 +335,21 @@ export default function Analyze() {
         setOptimizing(true);
         
         try {
-            let nodeList = points.map(p => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown', stake: p.stake }));
+            let nodeList = points.map(p => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown', stake: p.stake, provider: p.provider }));
             if (nodeList.length === 0) {
                 console.warn('Points is empty; attempting to re-parse nodeData');
                 const parserMap: Record<string, (raw: string) => { points: NodePoint[]; counts: CountryCount[]; tor?: number }> = { ethereum: parseEthereumDump, bitcoin: parseBitcoinDump, solana: parseSolanaDump };
                 const selectedParser = parserMap[network] ?? parseEthereumDump;
                 const { points: fallbackPoints } = selectedParser(nodeData);
-                nodeList = fallbackPoints.map((p: NodePoint) => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown', stake: p.stake }));
+                nodeList = fallbackPoints.map((p: NodePoint) => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown', stake: p.stake, provider: p.provider }));
             }
+            
+            const normalizedTargets = (scenario === 'cloud' ? providerTargets : targets).map(code => code.toLowerCase());
             
             const response = await fetch(`${BACKEND_URL}/optimize`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nodes: nodeList })
+                body: JSON.stringify({ nodes: nodeList, scenario, targets: normalizedTargets, network })
             });
             
             if (!response.ok) {
@@ -354,9 +359,15 @@ export default function Analyze() {
             
             const result = await response.json();
             setSuggestions(result.suggestions);  // Update state
-            if (results) {
-                setResults({ ...results, suggestion: result.suggestions.join(' ') });  // Combine with existing results
-            }
+            setRemainingCountries(result.remaining_countries || 0);
+            setResults({
+                gini: result.gini,
+                nakamoto: result.nakamoto,
+                connectivityLoss: result.connectivity_loss,
+                failed_nodes: result.failed_nodes,
+                total_nodes: result.total_nodes,
+                suggestion: result.suggestions.join(' ')
+            });
             toast.success("Optimization suggestions generated");
         } catch (error: any) {
             console.error(error);
@@ -663,13 +674,6 @@ export default function Analyze() {
                                     className="w-full bg-blue-600 text-white py-1 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
                                 >
                                     {analyzing ? "Analyzing..." : "Run Analysis"}
-                                </button>
-                                <button
-                                    onClick={handleOptimize}
-                                    disabled={optimizing || !nodeData.trim()}
-                                    className="w-full bg-purple-600 text-white py-1 rounded-lg font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
-                                >
-                                    {optimizing ? "Optimizing..." : "Get Optimization Suggestions"}
                                 </button>
                                 <button
                                     onClick={handleSave}
