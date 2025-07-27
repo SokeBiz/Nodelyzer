@@ -199,4 +199,8 @@ export const countryNameToCode: Record<string, string> = {
   "yemen": "ye",
   "zambia": "zm",
   "zimbabwe": "zw",
-}; 
+};
+
+export const codeToCountryName: Record<string, string> = Object.fromEntries(
+  Object.entries(countryNameToCode).map(([name, code]) => [code, name.charAt(0).toUpperCase() + name.slice(1)])
+); 

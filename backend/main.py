@@ -23,23 +23,33 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 class NodeData(BaseModel):
     nodes: list[dict]  # e.g., [{"lat": 40.7, "lon": -74.0, "country": "US"}]
 
+class FailureRequest(BaseModel):
+    nodes: list[dict]  # e.g., [{"lat": 40.7, "lon": -74.0, "country": "us"}]
+    scenario: str = ""
+    targets: list[str] = []
+
 def gini_coefficient(values):
     import numpy as np
-    arr = np.sort([v for v in values if v > 0])
+    cleaned_values = [float(v) for v in values if v > 0]
+    if not cleaned_values: return 0.0
+    arr = np.sort(cleaned_values)
     n = len(arr)
-    if n <= 1: return 0
+    if n <= 1: return 0.0
     index = np.arange(1, n + 1)
-    return (np.sum((2 * index - n - 1) * arr) / (n * np.sum(arr)))  # Gini formula
+    numerator = np.sum((2 * index - n - 1) * arr)
+    denominator = n * np.sum(arr)
+    return float(numerator / denominator)
 
 def nakamoto_coefficient(values):
-    sorted_values = sorted(values, reverse=True)
+    sorted_values = sorted((float(v) for v in values if v > 0), reverse=True)
+    if not sorted_values: return 0
     total = sum(sorted_values)
-    cumulative = 0
+    cumulative = 0.0
     for i, val in enumerate(sorted_values, 1):
         cumulative += val
         if cumulative >= total / 2:
             return i
-    return len(values)  # Fallback
+    return len(sorted_values)
 
 def generate_suggestions(df, gini, nakamoto):
     suggestions = []
@@ -61,53 +71,55 @@ def generate_suggestions(df, gini, nakamoto):
     return suggestions if suggestions else ["Network looks balanced—no major suggestions."]
 
 @app.post("/simulate-failure")
-def simulate_failure(data: NodeData, scenario: str = "", target: str = ""):  # Allow empty defaults for overview
+def simulate_failure(request: FailureRequest):  # Updated to take combined model
     # Convert nodes to a Pandas DataFrame for easier analysis
-    df = pd.DataFrame(data.nodes)
+    df = pd.DataFrame(request.nodes)
     
-    total_nodes = len(data.nodes)
+    total_nodes = len(request.nodes)
     
     if total_nodes == 0:
         raise HTTPException(status_code=400, detail="No nodes provided.")
     
-    if scenario == "cloud":
+    if request.scenario == "cloud":
         if 'provider' not in df.columns or df['provider'].isnull().all():
             raise HTTPException(status_code=400, detail="Node data lacks 'provider' information for cloud scenario. Please include provider details or choose another scenario.")
     
-    # Calculate general metrics unconditionally
-    country_counts = df['country'].value_counts().tolist()  # List of node counts per country
-    gini = gini_coefficient(country_counts)
-    nakamoto = nakamoto_coefficient(country_counts)
-    
-    if scenario == "":
-        logging.info(f"Running overview for {total_nodes} nodes")
-        failed_count = 0
-        connectivity_loss = 0
+    # Calculate failed nodes based on scenario
+    if request.scenario == "region":
+        failed_mask = df['country'].isin(request.targets)
+    elif request.scenario == "cloud":
+        failed_mask = df.get('provider', '').isin(request.targets)
+    elif request.scenario == "51":  # Updated to match frontend value
+        failed_mask = pd.Series([False] * len(df))  # Placeholder; cannot accurately simulate without more info
     else:
-        if not target:
-            raise HTTPException(status_code=400, detail="Target must be provided for selected scenario.")
-        logging.info(f"Simulating {scenario} failure for {total_nodes} nodes targeting {target}")
-        
-        # Calculate failed nodes based on scenario
-        if scenario == "region":
-            failed_count = df[df['country'] == target].shape[0]  # Counts rows matching the target country
-        elif scenario == "cloud":
-            failed_count = df[df.get('provider', '') == target].shape[0]  # Assumes nodes have a 'provider' field like "AWS"
-        elif scenario == "attack":
-            failed_count = int(total_nodes * 0.1)  # Dummy: Assume 10% nodes fail in a targeted attack
-        else:
-            failed_count = 0
-        
-        connectivity_loss = (failed_count / total_nodes) * 100 if total_nodes > 0 else 0  # Percentage of nodes lost
+        failed_mask = pd.Series([False] * len(df))
     
+    failed_count = int(failed_mask.sum())
+    
+    if 'stake' in df.columns and not df['stake'].isnull().all():
+        total_stake = float(df['stake'].sum())
+        failed_stake = float(df[failed_mask]['stake'].sum())
+        connectivity_loss = (failed_stake / total_stake * 100) if total_stake > 0 else 0.0
+        remaining_df = df[~failed_mask]
+        country_values = remaining_df.groupby('country')['stake'].sum().tolist()
+    else:
+        connectivity_loss = (failed_count / total_nodes * 100) if total_nodes > 0 else 0.0
+        remaining_df = df[~failed_mask]
+        country_values = remaining_df['country'].value_counts().tolist()
+    
+    gini = gini_coefficient(country_values)
+    nakamoto = nakamoto_coefficient(country_values)
+    remaining_countries = len(remaining_df['country'].unique()) if 'country' in remaining_df.columns else 0
+
     # Return all results
     return {
         "total_nodes": total_nodes,
         "failed_nodes": failed_count,
         "connectivity_loss": f"{connectivity_loss:.2f}%",
-        "scenario": scenario or "overview",
+        "scenario": request.scenario or "overview",
         "gini": gini,
-        "nakamoto": nakamoto
+        "nakamoto": nakamoto,
+        "remaining_countries": remaining_countries
     }
 
 @app.post("/optimize")
@@ -120,12 +132,28 @@ def optimize(data: NodeData):
     logging.info(f"Optimizing for {len(data.nodes)} nodes")
 
     # Reuse existing metrics
-    country_counts_list = df['country'].value_counts().tolist()
-    gini = gini_coefficient(country_counts_list)
-    nakamoto = nakamoto_coefficient(country_counts_list)
+    if 'stake' in df.columns and not df['stake'].isnull().all():
+        country_values = df.groupby('country')['stake'].sum().tolist()
+    else:
+        country_values = df['country'].value_counts().tolist()
+    gini = gini_coefficient(country_values)
+    nakamoto = nakamoto_coefficient(country_values)
     
     # Generate suggestions
-    suggestions = generate_suggestions(df, gini, nakamoto)
+    if 'stake' in df.columns:
+        country_counts = df.groupby('country')['stake'].sum()
+    else:
+        country_counts = df['country'].value_counts()
+    underrepresented = country_counts.nsmallest(5).index.tolist()  # Countries with least nodes/stake
+    suggestions = []
+    if gini > 0.5:
+        suggestions.append("High concentration detected. Consider redistributing nodes to improve decentralization.")
+    if underrepresented:
+        suggestions.append(f"Add nodes in underrepresented countries: {', '.join(underrepresented)}")
+    if nakamoto < 5:
+        suggestions.append(f"Low Nakamoto coefficient ({nakamoto}). Add nodes to diverse locations to increase resilience.")
+    if not suggestions:
+        suggestions = ["Network looks balanced—no major suggestions."]
     
     return {
         "gini": gini,

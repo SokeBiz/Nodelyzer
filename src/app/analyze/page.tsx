@@ -9,6 +9,7 @@ import Highcharts from "highcharts/highmaps";
 import HighchartsReact from "highcharts-react-official";
 import worldMapData from "@highcharts/map-collection/custom/world.geo.json" assert { type: "json" };
 import { countryNameToCode } from '@/lib/countryNameToCode'
+import { codeToCountryName } from '@/lib/countryNameToCode';
 import { parseEthereumDump } from '@/lib/parseEthereum';
 import { parseBitcoinDump } from '@/lib/parseBitcoin';
 import { parseSolanaDump } from '@/lib/parseSolana';
@@ -16,10 +17,11 @@ import { giniCoefficient } from '@/lib/utils';
 import { useAnalysisDialog } from '@/context/AnalysisDialogContext';
 import { saveAnalysis, getAnalysisById, updateAnalysis } from '@/lib/analysisService';
 import { toast } from 'sonner';
+import Highcharts3d from 'highcharts/highcharts-3d';
 
 export default function Analyze() {
     const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-    // Then in fetch: fetch(`${BACKEND_URL}/simulate-failure`, ...)
+
     const { user, loading } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -29,7 +31,6 @@ export default function Analyze() {
     // Scenario selection state
     const [scenario, setScenario] = useState("");  // Default to empty for Overview
     const [network, setNetwork] = useState("bitcoin");
-    const [target, setTarget] = useState('US');
     const [analyzing, setAnalyzing] = useState(false);
     const [results, setResults] = useState<any>(null);
     const [saving, setSaving] = useState(false);
@@ -42,7 +43,7 @@ export default function Analyze() {
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     // Parsed node points and per-country counts (for Highcharts)
-    interface NodePoint { name?: string; lat: number; lon: number; country?: string; }
+    interface NodePoint { name?: string; lat: number; lon: number; country?: string; stake?: number; provider?: string; }
     interface CountryCount { code: string; value: number; }
 
     const [points, setPoints] = useState<NodePoint[]>([]);
@@ -52,6 +53,13 @@ export default function Analyze() {
     // Near your other states (e.g., after const [results, setResults] = useState<any>(null);)
     const [suggestions, setSuggestions] = useState<string[]>([]);
     const [optimizing, setOptimizing] = useState(false);
+
+    const [targets, setTargets] = useState<string[]>(['']);
+    const [providerTargets, setProviderTargets] = useState<string[]>([]);
+    const chartComponentRef = useRef<HighchartsReact.RefObject>(null);
+
+    const [remainingCountries, setRemainingCountries] = useState(0);
+    const [viewMode, setViewMode] = useState<'map' | 'bar'>('map');
 
     const countryToCode = (name?: string): string | undefined => {
         if (!name) return undefined;
@@ -154,6 +162,14 @@ export default function Analyze() {
     }, []);
 
     useEffect(() => {
+        import('highcharts/highcharts-3d').then((mod) => {
+            if (mod && typeof mod.default === 'function') {
+                mod.default(Highcharts);
+            }
+        });
+    }, []);
+
+    useEffect(() => {
         if (!loading && !user) {
             router.push("/login");
         }
@@ -169,17 +185,18 @@ export default function Analyze() {
         const reader = new FileReader();
         reader.onload = (event) => {
             const text = event.target?.result as string;
-            // Basic heuristic to auto-select network based on content (only adjust if not already user-selected)
-            const lower = text ?? "";
+            const lowerText = text.toLowerCase();
+            const lowerName = file.name.toLowerCase();
             let detected: string | null = null;
-            if (lower.includes("\"protocol_version\"") || (lower.trim().startsWith("{") && lower.includes("\"nodes\""))) {
-                detected = "bitcoin";
-            } else if (lower.includes("\"epoch\"") || lower.includes("\"activated_stake\"")) {
-                detected = "solana";
+            if (lowerName.includes('solana') || lowerName.includes('validator')) {
+                detected = 'solana';
+            } else if (lowerText.includes('protocol_version') || (lowerText.trim().startsWith('{') && lowerText.includes('nodes'))) {
+                detected = 'bitcoin';
+            } else if (lowerText.includes('epoch') || lowerText.includes('activatedstake') || lowerText.includes('nodepubkey')) {
+                detected = 'solana';
             } else {
-                detected = "ethereum";
+                detected = 'ethereum';
             }
-            // Only update if detection differs and the user hasn't already set another network after choosing the file
             setNetwork(prev => prev === detected ? prev : detected);
             setNodeData(text);
         };
@@ -194,24 +211,24 @@ export default function Analyze() {
         
         try {
             // Prepare data in the format backend expects (adapt your points to include country, etc.)
-            let nodeList = points.map(p => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown' }));  // Use your points state
+            let nodeList = points.map(p => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown', stake: p.stake }));  // Use your points state
             if (nodeList.length === 0) {
                 console.warn('Points is empty; attempting to re-parse nodeData');
                 // Fallback: Re-parse if points not set (timing issue)
                 const parserMap: Record<string, (raw: string) => { points: NodePoint[]; counts: CountryCount[]; tor?: number }> = { ethereum: parseEthereumDump, bitcoin: parseBitcoinDump, solana: parseSolanaDump };
                 const selectedParser = parserMap[network] ?? parseEthereumDump;
                 const { points: fallbackPoints } = selectedParser(nodeData);
-                nodeList = fallbackPoints.map((p: NodePoint) => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown' }));
+                nodeList = fallbackPoints.map((p: NodePoint) => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown', stake: p.stake }));
             }
             
-            const normalizedTarget = countryNameToCode[target.toLowerCase()] ?? target.toLowerCase();
+            const normalizedTargets = (scenario === 'cloud' ? providerTargets : targets).map(code => code.toLowerCase());
             
             console.log('Preparing to send', nodeList.length, 'nodes to backend');
             console.log('Sample node:', nodeList[0]);
             const requestBody = JSON.stringify({
                 nodes: nodeList,
                 scenario: scenario,
-                target: normalizedTarget
+                targets: normalizedTargets
             });
             console.log('Request body size:', requestBody.length);
             
@@ -232,8 +249,10 @@ export default function Analyze() {
                 nakamoto: result.nakamoto,
                 connectivityLoss: result.connectivity_loss,
                 failed_nodes: result.failed_nodes,  // Add this for display
+                total_nodes: result.total_nodes,
                 suggestion: "Analysis complete."  // We'll update with optimize later
             });
+            setRemainingCountries(result.remaining_countries || 0);
         } catch (error: any) {
             console.error(error);
             toast.error(error.message || "Failed to run analysis");
@@ -294,6 +313,11 @@ export default function Analyze() {
         setCountryCounts([]);
         setTorCount(0);
         setResults(null);
+        setTargets([]);
+        setProviderTargets([]);
+        setRemainingCountries(0);
+        setSuggestions([]);
+        setViewMode('map');
         if (typeof window !== "undefined") {
             localStorage.removeItem("analysisState");
         }
@@ -308,13 +332,13 @@ export default function Analyze() {
         setOptimizing(true);
         
         try {
-            let nodeList = points.map(p => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown' }));
+            let nodeList = points.map(p => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown', stake: p.stake }));
             if (nodeList.length === 0) {
                 console.warn('Points is empty; attempting to re-parse nodeData');
                 const parserMap: Record<string, (raw: string) => { points: NodePoint[]; counts: CountryCount[]; tor?: number }> = { ethereum: parseEthereumDump, bitcoin: parseBitcoinDump, solana: parseSolanaDump };
                 const selectedParser = parserMap[network] ?? parseEthereumDump;
                 const { points: fallbackPoints } = selectedParser(nodeData);
-                nodeList = fallbackPoints.map((p: NodePoint) => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown' }));
+                nodeList = fallbackPoints.map((p: NodePoint) => ({ lat: p.lat, lon: p.lon, country: p.country || 'Unknown', stake: p.stake }));
             }
             
             const response = await fetch(`${BACKEND_URL}/optimize`, {
@@ -341,6 +365,62 @@ export default function Analyze() {
             setOptimizing(false);
         }
     };
+
+    // Attach click handlers for region selection
+    useEffect(() => {
+        if (scenario !== "region" || !chartComponentRef.current) return;
+
+        const chart = chartComponentRef.current.chart;
+
+        const handlePointClick = (point: any) => {
+            // @ts-ignore - 'hc-key' is map-specific
+            const code = point['hc-key'];
+            const name = point.name;
+            const value = point.value || 0;
+
+            if (value > 0) {
+                setTargets(prev => 
+                    prev.includes(code) 
+                    ? prev.filter(c => c !== code) 
+                    : [...prev, code]
+                );
+                toast.success(`Toggled selection for ${name}`);
+            } else {
+                toast.error(`Cannot select ${name}: No nodes present`);
+            }
+        };
+
+        const points = chart.series[0]?.points || [];
+        points.forEach(point => {
+            if (point.graphic && point.graphic.element) {
+                point.graphic.element.onclick = () => handlePointClick(point);
+            }
+        });
+
+        return () => {
+            points.forEach(point => {
+                if (point.graphic && point.graphic.element) {
+                    point.graphic.element.onclick = null;
+                }
+            });
+        };
+    }, [scenario, countryCounts, toast]);
+
+    // Update visual highlighting for selected regions
+    useEffect(() => {
+        if (!chartComponentRef.current) return;
+
+        const chart = chartComponentRef.current.chart;
+        const points = chart.series[0]?.points || [];
+        points.forEach(point => {
+            // @ts-ignore - 'hc-key' is map-specific
+            const isSelected = targets.includes(point['hc-key']);
+            point.update({
+                color: isSelected ? '#FF0000' : undefined,  // Red for selected, reset to default otherwise
+            }, false);
+        });
+        chart.redraw();
+    }, [targets, countryCounts]);
 
     // Highcharts map options derived from current points / countryCounts
     const mapOptions = useMemo(() => ({
@@ -385,6 +465,69 @@ export default function Analyze() {
         ],
         credits: { enabled: false },
     }), [points, countryCounts]);
+
+    const barOptions = useMemo(() => ({
+        chart: {
+            type: 'column',
+            height: 400,
+            backgroundColor: 'transparent',
+            options3d: {
+                enabled: true,
+                alpha: 0,
+                beta: 350,
+                depth: 40,
+                viewDistance: 25
+            }
+        },
+        title: { text: null },
+        xAxis: {
+            categories: countryCounts.map(c => codeToCountryName[c.code.toUpperCase()] || c.code.toUpperCase()),
+            title: { text: 'Countries', style: { color: '#fff' } },
+            labels: { style: { color: '#fff' } }
+        },
+        yAxis: {
+            title: { text: 'Nodes', style: { color: '#fff' } },
+            labels: { style: { color: '#fff' } }
+        },
+        plotOptions: {
+            column: {
+                depth: 25
+            }
+        },
+        series: [{
+            name: 'Nodes',
+            data: countryCounts.map(c => c.value),
+            colorByPoint: true
+        }],
+        credits: { enabled: false }
+    }), [countryCounts]);
+
+    const uniqueProviders = useMemo(() => [...new Set(points.map(p => p.provider).filter((p): p is string => Boolean(p)))], [points]);
+    const providerCounts = useMemo(() => {
+        const counts: Record<string, number> = {};
+        points.forEach(p => {
+            if (p.provider) {
+                counts[p.provider] = (counts[p.provider] || 0) + (p.stake || 1);
+            }
+        });
+        return Object.entries(counts).map(([name, y]) => ({ name, y }));
+    }, [points]);
+
+    const pieOptions = useMemo(() => ({
+        chart: { type: 'pie', height: 300, backgroundColor: 'transparent' },
+        title: { text: 'Cloud Provider Distribution', style: { color: '#fff' } },
+        tooltip: { pointFormat: '{series.name}: <b>{point.percentage:.1f}%</b>' },
+        plotOptions: {
+            pie: {
+                allowPointSelect: true,
+                cursor: 'pointer',
+                dataLabels: { enabled: true, format: '<b>{point.name}</b>: {point.percentage:.1f} %', style: { color: '#fff' } },
+                animation: { duration: 1000, easing: 'easeOutBounce' }
+            }
+        },
+        series: [{ name: 'Providers', colorByPoint: true, data: providerCounts }],
+        credits: { enabled: false }
+    }), [providerCounts]);
 
     if (isPendingAuth) {
         return null; // or a loading spinner
@@ -477,14 +620,42 @@ export default function Analyze() {
                                     <option value="ethereum">Ethereum</option>
                                     <option value="solana">Solana</option>
                                 </select>
-                                {scenario && (  // Conditionally show target input if scenario is selected
+                                {scenario && scenario !== "region" && (  // Conditionally show target input if scenario is selected and not region
                                     <input
                                         type="text"
                                         className="w-full mt-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         placeholder={`Target (e.g., ${scenario === 'region' ? 'US' : scenario === 'cloud' ? 'AWS' : 'Entity'})`}
-                                        value={target}
-                                        onChange={e => setTarget(e.target.value)}
+                                        value={scenario === 'cloud' ? providerTargets.join(', ') : targets[0] || ''}
+                                        onChange={scenario !== 'cloud' ? e => setTargets([e.target.value]) : undefined}
+                                        readOnly={scenario === 'cloud'}
                                     />
+                                )}
+                                {scenario === "cloud" && network === "solana" && (
+                                    <div className="w-full max-h-32 overflow-y-auto px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white mb-2">
+                                        {uniqueProviders.map((prov: string) => (
+                                            <div key={prov} className="flex items-center gap-2 py-1">
+                                                <input
+                                                    type="checkbox"
+                                                    id={prov}
+                                                    checked={providerTargets.includes(prov)}
+                                                    onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                                                        const checked = e.target.checked;
+                                                        setProviderTargets(prev =>
+                                                            checked ? [...prev, prov] : prev.filter(p => p !== prov)
+                                                        );
+                                                    }}
+                                                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                />
+                                                <label htmlFor={prov} className="text-sm">{prov}</label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {scenario === "region" && (
+                                    <>
+                                        <p className="text-gray-300 mt-2">Click on the map to select regions for outage. Only regions with nodes can be selected.</p>
+                                        <div className="text-gray-300 mt-1">Selected: {targets.map(code => codeToCountryName[code] || code.toUpperCase()).join(', ') || 'None'}</div>
+                                    </>
                                 )}
                                 <button
                                     onClick={handleAnalyze}
@@ -510,26 +681,71 @@ export default function Analyze() {
 
                             </div>
                         </div>
-                        {/* Map Visualization with Highcharts */}
-                        <div className="w-full flex items-center bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-                            <HighchartsReact
-                                highcharts={Highcharts}
-                                constructorType={"mapChart"}
-                                options={mapOptions}
-                                containerProps={{ style: { width: '100%', minWidth: '300px' } }}
-                            />
-                        
+                        <div className="flex-1 flex flex-col gap-4">
+                            {/* Map Visualization with Highcharts */}
+                            <div className="flex justify-end mt-2">
+                                <select
+                                    className="px-3 py-1 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    value={viewMode}
+                                    onChange={e => setViewMode(e.target.value as 'map' | 'bar')}
+                                >
+                                    <option value="map">Map View</option>
+                                    <option value="bar">Bar Chart View</option>
+                                </select>
+                            </div>
+                            {viewMode === 'map' ? (
+                                <div className="w-full flex items-center bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+                                    <HighchartsReact
+                                        highcharts={Highcharts}
+                                        constructorType={"mapChart"}
+                                        options={mapOptions}
+                                        ref={chartComponentRef}
+                                        containerProps={{ style: { width: '100%', minWidth: '300px' } }}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="w-full flex items-center bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+                                    <HighchartsReact
+                                        highcharts={Highcharts}
+                                        options={barOptions}
+                                        containerProps={{ style: { width: '100%', minWidth: '300px' } }}
+                                    />
+                                </div>
+                            )}
+                            {/* Pie Chart for Provider Distribution (Solana only) */}
+                            {network === 'solana' && providerCounts.length > 0 && (
+                                <div className="w-full flex items-center bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+                                    <HighchartsReact
+                                        highcharts={Highcharts}
+                                        options={{
+                                            ...pieOptions,
+                                            plotOptions: {
+                                                ...pieOptions.plotOptions,
+                                                pie: {
+                                                    ...(pieOptions.plotOptions?.pie || {}),
+                                                    animation: {
+                                                        duration: 2000, // Slower animation (default is 1000)
+                                                        easing: 'easeOutBounce'
+                                                    }
+                                                }
+                                            }
+                                        }}
+                                        containerProps={{ style: { width: '100%', height: '300px' } }}
+                                    />
+                                </div>
+                            )}
                         </div>
                     </CardContent>
-                    <CardFooter className="flex flex-col md:flex-row gap-8 items-stretch md:items-start px-12 pb-8 pt-6">
+                    <CardFooter className="flex flex-col md:flex-row gap-5 items-stretch md:items-start md:px-12 pb-8 pt-0">
                         {/* Metrics */}
                         <div className="flex-1 bg-white/5 rounded-xl border border-white/10 p-6 min-w-[220px]">
                             <div className="text-xl font-bold mb-2 text-white">Metrics</div>
                             <div className="text-gray-300 text-base space-y-1">
+                                <div>Total Nodes: <span className="font-mono">{results ? results.total_nodes : points.length}</span></div>
                                 <div>Gini Coefficient: <span className="font-mono">{results ? results.gini.toFixed(3) : "-"}</span></div>
                                 <div>Nakamoto Coefficient: <span className="font-mono">{results ? results.nakamoto : "-"}</span></div>
                                 <div>Connectivity Loss: <span className="font-mono">{results ? results.connectivityLoss : "-"}</span></div>
-                                <div>Countries Represented: <span className="font-mono">{countryCounts.length}</span></div>
+                                <div>Countries Represented{results ? " (Remaining)" : ""}: <span className="font-mono">{results ? remainingCountries : countryCounts.length}</span></div>
                                 <div>Nodes via TOR: <span className="font-mono">{torCount}</span></div>
                                 <div>Failed Nodes: <span className="font-mono">{results ? results.failed_nodes : "-"}</span></div>
                             </div>
