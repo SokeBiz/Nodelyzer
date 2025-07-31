@@ -18,6 +18,7 @@ import { useAnalysisDialog } from '@/context/AnalysisDialogContext';
 import { saveAnalysis, getAnalysisById, updateAnalysis } from '@/lib/analysisService';
 import { toast } from 'sonner';
 import Highcharts3d from 'highcharts/highcharts-3d';
+import { generateAnalysisPDF } from '@/lib/pdfGenerator';
 
 export default function Analyze() {
     const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
@@ -57,6 +58,10 @@ export default function Analyze() {
     const [targets, setTargets] = useState<string[]>(['']);
     const [providerTargets, setProviderTargets] = useState<string[]>([]);
     const chartComponentRef = useRef<HighchartsReact.RefObject>(null);
+
+    // ADD REFS FOR BAR AND PIE
+    const barChartRef = useRef<HighchartsReact.RefObject>(null);
+    const pieChartRef = useRef<HighchartsReact.RefObject>(null);
 
     const [remainingCountries, setRemainingCountries] = useState(0);
     const [viewMode, setViewMode] = useState<'map' | 'bar'>('map');
@@ -163,6 +168,22 @@ export default function Analyze() {
 
     useEffect(() => {
         import('highcharts/highcharts-3d').then((mod) => {
+            if (mod && typeof mod.default === 'function') {
+                mod.default(Highcharts);
+            }
+        });
+    }, []);
+
+    useEffect(() => {
+        import('highcharts/modules/exporting').then((exportingMod) => {
+            if (exportingMod && typeof exportingMod.default === 'function') {
+                exportingMod.default(Highcharts);
+            }
+        });
+    }, []);
+
+    useEffect(() => {
+        import('highcharts/modules/offline-exporting').then((mod) => {
             if (mod && typeof mod.default === 'function') {
                 mod.default(Highcharts);
             }
@@ -697,8 +718,7 @@ export default function Analyze() {
                                     <option value="bar">Bar Chart View</option>
                                 </select>
                             </div>
-                            {viewMode === 'map' ? (
-                                <div className="w-full flex items-center bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+                            <div className="w-full flex items-center bg-white/5 rounded-xl border border-white/10 overflow-hidden" style={{ display: viewMode === 'map' ? 'block' : 'none' }}>
                                     <HighchartsReact
                                         highcharts={Highcharts}
                                         constructorType={"mapChart"}
@@ -707,15 +727,14 @@ export default function Analyze() {
                                         containerProps={{ style: { width: '100%', minWidth: '300px' } }}
                                     />
                                 </div>
-                            ) : (
-                                <div className="w-full flex items-center bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+                            <div className="w-full flex items-center bg-white/5 rounded-xl border border-white/10 overflow-hidden" style={{ display: viewMode === 'bar' ? 'block' : 'none' }}>
                                     <HighchartsReact
                                         highcharts={Highcharts}
                                         options={barOptions}
+                                    ref={barChartRef}
                                         containerProps={{ style: { width: '100%', minWidth: '300px' } }}
                                     />
                                 </div>
-                            )}
                             {/* Pie Chart for Provider Distribution (Solana only) */}
                             {network === 'solana' && providerCounts.length > 0 && (
                                 <div className="w-full flex items-center bg-white/5 rounded-xl border border-white/10 overflow-hidden">
@@ -734,6 +753,7 @@ export default function Analyze() {
                                                 }
                                             }
                                         }}
+                                        ref={pieChartRef}
                                         containerProps={{ style: { width: '100%', height: '300px' } }}
                                     />
                                 </div>
@@ -760,7 +780,26 @@ export default function Analyze() {
                             <div className="text-gray-300 text-base">
                                 {suggestions.length > 0 ? suggestions.map((s, i) => <p key={i}>{s}</p>) : (results ? results.suggestion : "Run an analysis to get suggestions.")}
                             </div>
+                            <button
+                            onClick={() => generateAnalysisPDF({
+                                analysisName,
+                                network,
+                                results,
+                                suggestions,
+                                points,
+                                countryCounts,
+                                torCount,
+                                mapChartRef: chartComponentRef,
+                                barChartRef: barChartRef,
+                                pieChartRef: network === 'solana' ? pieChartRef : undefined,
+                            })}
+                            disabled={!results || analyzing || optimizing || saving}
+                            className="bg-purple-600 text-white my-2 py-2 px-4 rounded-lg font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Download PDF Report
+                        </button>
                         </div>
+                        
                     </CardFooter>
                 </Card>
             </main>

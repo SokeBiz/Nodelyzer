@@ -6,6 +6,7 @@ import logging
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 import math
+import numpy as np
 
 logging.basicConfig(level=logging.INFO)  # Sets up basic logging
 
@@ -31,7 +32,6 @@ class FailureRequest(BaseModel):
     network: str = "bitcoin"
 
 def gini_coefficient(values):
-    import numpy as np
     cleaned_values = [float(v) for v in values if v > 0]
     if not cleaned_values: return 0.0
     arr = np.sort(cleaned_values)
