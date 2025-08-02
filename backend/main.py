@@ -179,7 +179,8 @@ def optimize(request: FailureRequest):
     suggestions = []
     
     current_countries = set(remaining_df['country'].str.lower().unique()) if 'country' in remaining_df else set()
-    available_countries = [c for c in all_countries if c not in current_countries]
+    failed_targets = set([t.lower() for t in request.targets]) if request.targets else set()
+    available_countries = [c for c in all_countries if c not in current_countries and c not in failed_targets]
     current_num_countries = len(current_countries)
     
     additional_nodes = int(0.25 * total_nodes)  # This is approximate; we'll adjust total based on ceil
