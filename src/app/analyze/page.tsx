@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, ChangeEvent, useMemo, useRef, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
 import Header from "@/components/header";
