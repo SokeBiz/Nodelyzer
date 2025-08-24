@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, ChangeEvent, useMemo, useRef } from "react";
+import { useEffect, useState, ChangeEvent, useMemo, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
@@ -20,7 +20,8 @@ import { toast } from 'sonner';
 import Highcharts3d from 'highcharts/highcharts-3d';
 import { generateAnalysisPDF } from '@/lib/pdfGenerator';
 
-export default function Analyze() {
+// Wrapper component that safely uses useSearchParams
+function AnalyzeContent() {
     const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 
     const { user, loading } = useAuth();
@@ -731,7 +732,7 @@ export default function Analyze() {
                                     <HighchartsReact
                                         highcharts={Highcharts}
                                         options={barOptions}
-                                    ref={barChartRef}
+                                        ref={barChartRef}
                                         containerProps={{ style: { width: '100%', minWidth: '300px' } }}
                                     />
                                 </div>
@@ -804,5 +805,13 @@ export default function Analyze() {
                 </Card>
             </main>
         </>
+    );
+}
+
+export default function Analyze() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <AnalyzeContent />
+        </Suspense>
     );
 }
