@@ -266,3 +266,7 @@ def optimize(request: FailureRequest):
         "remaining_countries": len(remaining_df['country'].unique()) if 'country' in remaining_df else 0,
         "suggestions": suggestions
     }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
