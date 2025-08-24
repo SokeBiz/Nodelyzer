@@ -26,9 +26,14 @@ function AnalyzeContent() {
 
     const { user, loading } = useAuth();
     const router = useRouter();
-    const searchParams = useSearchParams();
-    const analysisIdParam = searchParams.get('id');
-    const [analysisId, setAnalysisId] = useState<string | null>(analysisIdParam);
+    const [analysisId, setAnalysisId] = useState<string | null>(null);
+    
+    // Move useSearchParams to useEffect to avoid SSR issues
+    useEffect(() => {
+        const searchParams = new URLSearchParams(window.location.search);
+        const analysisIdParam = searchParams.get('id');
+        setAnalysisId(analysisIdParam);
+    }, []);
 
     // Scenario selection state
     const [scenario, setScenario] = useState("");  // Default to empty for Overview
@@ -88,11 +93,11 @@ function AnalyzeContent() {
     useEffect(() => {
         if (typeof window === "undefined") return;
         // If analysisId query param is present, attempt to load from Firestore first
-        if (analysisIdParam) {
+        if (analysisId) {
             (async () => {
-                const rec = await getAnalysisById(analysisIdParam);
+                const rec = await getAnalysisById(analysisId);
                 if (rec) {
-                    setAnalysisId(rec.id || analysisIdParam);
+                    setAnalysisId(rec.id || analysisId);
                     setNodeData(rec.nodeData || "");
                     setAnalysisName(rec.name || "");
                     setNetwork(rec.network || "bitcoin");
@@ -118,7 +123,7 @@ function AnalyzeContent() {
         } catch (_) {
             // ignore parse errors
         }
-    }, [analysisIdParam]);
+    }, [analysisId]);
 
     // Persist analysis state whenever any key value changes
     useEffect(() => {
