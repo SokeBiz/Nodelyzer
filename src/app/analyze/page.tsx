@@ -7,7 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter }
 import Header from "@/components/header";
 import Highcharts from "highcharts/highmaps";
 import HighchartsReact from "highcharts-react-official";
-import worldMapData from "@highcharts/map-collection/custom/world.geo.json" assert { type: "json" };
+import worldMapData from "@highcharts/map-collection/custom/world.geo.json";
 import { countryNameToCode } from '@/lib/countryNameToCode';
 import { codeToCountryName } from '@/lib/countryNameToCode';
 import { parseEthereumDump } from '@/lib/parseEthereum';
