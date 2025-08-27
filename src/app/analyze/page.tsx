@@ -491,6 +491,21 @@ function AnalyzeContent() {
                 borderColor: "#888",
                 nullColor: "#222E3A",
                 showInLegend: false,
+                dataLabels: {
+                    enabled: true,
+                    format: '{point.name}<br/><span style="font-size: 7px; color: #38bdf8;">{point.value}</span>',
+                    style: {
+                        fontSize: '8px',
+                        fontWeight: 'bold',
+                        color: '#ffffff',
+                        textOutline: '1px contrast'
+                    },
+                    filter: {
+                        property: 'value',
+                        operator: '>',
+                        value: 0
+                    }
+                }
             },
             {
                 type: "mappoint" as const,
