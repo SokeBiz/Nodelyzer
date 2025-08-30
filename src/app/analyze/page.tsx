@@ -81,7 +81,17 @@ function AnalyzeContent() {
     // Open the start-analysis dialog when page loads
     const { openDialog, closeDialog } = useAnalysisDialog();
 
-    // Show dialog only when there is no node data AND user is authenticated
+    // Show dialog only when there is no node data AND user is authenticated AND dialog hasn't been dismissed for this session
+    const [dialogDismissed, setDialogDismissed] = useState(false);
+    const { isOpen } = useAnalysisDialog();
+    
+    // Track when dialog is dismissed
+    useEffect(() => {
+        if (!isOpen && !dialogDismissed && !nodeData.trim()) {
+            setDialogDismissed(true);
+        }
+    }, [isOpen, dialogDismissed, nodeData]);
+    
     useEffect(() => {
         if (!user || loading) {
             closeDialog();
@@ -90,10 +100,11 @@ function AnalyzeContent() {
         
         if (nodeData.trim()) {
             closeDialog();
-        } else {
+            setDialogDismissed(false); // Reset when data is provided
+        } else if (!dialogDismissed) {
             openDialog();
         }
-    }, [nodeData, user, loading, openDialog, closeDialog]);
+    }, [nodeData, user, loading, openDialog, closeDialog, dialogDismissed]);
 
     // Load saved analysis state on mount
     useEffect(() => {

@@ -8,7 +8,7 @@ import { getUserAnalyses, AnalysisRecord } from "@/lib/analysisService";
 import React from "react";
 
 export default function StartAnalysisDialog() {
-  const { isOpen, closeDialog } = useAnalysisDialog();
+  const { isOpen, closeDialog, dismissDialog } = useAnalysisDialog();
   const { user } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -30,7 +30,7 @@ export default function StartAnalysisDialog() {
   if (!isOpen) return null;
 
   const handleCreate = () => {
-    closeDialog();
+    dismissDialog();
     if (pathname !== "/analyze") {
       router.push("/analyze");
     }
