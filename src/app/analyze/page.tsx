@@ -81,14 +81,19 @@ function AnalyzeContent() {
     // Open the start-analysis dialog when page loads
     const { openDialog, closeDialog } = useAnalysisDialog();
 
-    // Show dialog only when there is no node data
+    // Show dialog only when there is no node data AND user is authenticated
     useEffect(() => {
+        if (!user || loading) {
+            closeDialog();
+            return;
+        }
+        
         if (nodeData.trim()) {
             closeDialog();
         } else {
             openDialog();
         }
-    }, [nodeData]);
+    }, [nodeData, user, loading, openDialog, closeDialog]);
 
     // Load saved analysis state on mount
     useEffect(() => {
@@ -199,9 +204,10 @@ function AnalyzeContent() {
 
     useEffect(() => {
         if (!loading && !user) {
+            closeDialog(); // Close dialog before redirecting
             router.push("/login");
         }
-    }, [user, loading, router]);
+    }, [user, loading, router, closeDialog]);
 
     const isPendingAuth = loading || !user;
 
