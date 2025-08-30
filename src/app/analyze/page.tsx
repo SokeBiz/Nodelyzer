@@ -22,7 +22,8 @@ import { generateAnalysisPDF } from '@/lib/pdfGenerator';
 
 // Wrapper component that safely uses useSearchParams
 function AnalyzeContent() {
-    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+    // const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 
     const { user, loading } = useAuth();
     const router = useRouter();
