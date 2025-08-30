@@ -79,11 +79,10 @@ function AnalyzeContent() {
     };
 
     // Open the start-analysis dialog when page loads
-    const { openDialog, closeDialog } = useAnalysisDialog();
+    const { openDialog, closeDialog, isOpen } = useAnalysisDialog();
 
     // Show dialog only when there is no node data AND user is authenticated AND dialog hasn't been dismissed for this session
     const [dialogDismissed, setDialogDismissed] = useState(false);
-    const { isOpen } = useAnalysisDialog();
     
     // Track when dialog is dismissed
     useEffect(() => {
