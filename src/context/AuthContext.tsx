@@ -49,7 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, loading, signInWithGoogle, logout }}>
