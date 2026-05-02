@@ -7,13 +7,24 @@ interface DialogContext {
   dismissDialog: () => void;
 }
 
+const STORAGE_KEY = "nodelyzer_analysis_dialog_dismissed";
+
 const AnalysisDialogContext = createContext<DialogContext | undefined>(undefined);
 
 export function AnalysisDialogProvider({ children }: { children: ReactNode }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const dismissed = localStorage.getItem(STORAGE_KEY);
+    return dismissed !== "true";
+  });
+
   const openDialog = () => setIsOpen(true);
   const closeDialog = () => setIsOpen(false);
-  const dismissDialog = () => setIsOpen(false);
+  const dismissDialog = () => {
+    setIsOpen(false);
+    localStorage.setItem(STORAGE_KEY, "true");
+  };
+
   return (
     <AnalysisDialogContext.Provider value={{ isOpen, openDialog, closeDialog, dismissDialog }}>
       {children}

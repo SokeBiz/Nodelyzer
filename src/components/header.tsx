@@ -4,7 +4,7 @@ import { useState } from "react";
 import React from "react";
 import Link from "next/link";
 import { Menu, X, LogOut } from "lucide-react";
-import { useAuthState, useSignOut } from "react-firebase-hooks/auth";
+import { useSignOut } from "react-firebase-hooks/auth";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 
@@ -73,7 +73,7 @@ export default function Header() {
               <Link href="/login" className="px-4 py-2 rounded-md border border-slate-700 hover:bg-slate-800 text-white transition-colors cursor-pointer">
                 Log In
               </Link>
-              <Link href="#" className="px-4 py-2 rounded-md bg-gradient-to-r from-blue-500 to-cyan-400 hover:from-blue-600 hover:to-cyan-500 text-white transition-colors cursor-pointer">
+              <Link href="/signup" className="px-4 py-2 rounded-md bg-gradient-to-r from-blue-500 to-cyan-400 hover:from-blue-600 hover:to-cyan-500 text-white transition-colors cursor-pointer">
                 Get Started
               </Link>
             </>
@@ -163,7 +163,7 @@ export default function Header() {
                           Log In
                         </Link>
                         <Link
-                          href="#"
+                          href="/signup"
                           className="w-full px-4 py-2 rounded-md bg-gradient-to-r from-blue-500 to-cyan-400 hover:from-blue-600 hover:to-cyan-500 text-white transition-colors text-center"
                           onClick={() => setIsMenuOpen(false)}
                         >

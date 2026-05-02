@@ -5,7 +5,6 @@ import Footer from "@/components/footer";
 import Header from "@/components/header";
 import HeroSection from "@/components/herosection";
 import HowItWorksSection from "@/components/howitworks";
-import Image from "next/image";
 import {useAuthState} from "react-firebase-hooks/auth"
 import {auth} from "@/lib/firebase"
 import { useRouter } from "next/navigation";

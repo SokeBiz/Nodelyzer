@@ -36,7 +36,7 @@ export default function HeroSection() {
               >
                 Start Analyzing
               </button>
-              <Link href="#" className="border border-slate-700 hover:bg-slate-800 text-white text-lg py-3 px-6 rounded-md transition-colors duration-200 text-center w-full sm:w-auto">
+              <Link href="#how-it-works" className="border border-slate-700 hover:bg-slate-800 text-white text-lg py-3 px-6 rounded-md transition-colors duration-200 text-center w-full sm:w-auto">
                 Learn
               </Link>
             </div>
